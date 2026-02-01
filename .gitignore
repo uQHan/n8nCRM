@@ -1,0 +1,20 @@
+# Environment variables
+env.txt
+.env
+.env.local
+
+# Docker volumes (data)
+db_storage/
+n8n_storage/
+
+# Next.js
+.next/
+node_modules/
+out/
+build/
+.DS_Store
+*.log
+
+# IDE
+.vscode/
+.idea/
