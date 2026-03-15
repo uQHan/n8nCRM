@@ -263,11 +263,11 @@ export default function Home() {
               </div>
 
               {/* Data Preview */}
-              <div className="overflow-x-auto">
+              <div>
                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Preview (first 50 rows)
                 </p>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden overflow-x-auto [&::-webkit-scrollbar]:w-5 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-lg">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-900">
                       <tr>
