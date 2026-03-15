@@ -1,0 +1,16 @@
+name,email,phone,company,title,address,city,state,country,zip
+John Smith,john.smith@techcorp.com,555-123-4567,TechCorp Inc,Software Engineer,123 Main St,San Francisco,CA,USA,94102
+  Jane Doe  ,JANE.DOE@EXAMPLE.COM,(555) 234-5678,Example LLC,Product Manager,456 Oak Ave,New York,NY,USA,10001
+John Smith,john.smith@techcorp.com,555-123-4567,TechCorp Inc,Software Engineer,123 Main St,San Francisco,CA,USA,94102
+Bob Johnson,bob@company,555.345.6789,Company XYZ,CEO,,Austin,TX,USA,78701
+Alice Williams,alice.williams@startup.io,5554567890,Startup IO,CTO,789 Pine Rd,Seattle,WA,USA,98101
+Mike Brown,mike.brown@corp.net,+1-555-567-8901,Corp Net,Sales Director,321 Elm St,Chicago,IL,USA,60601
+Sarah Davis,sarah@invalid-email,555 678 9012,Davis Consulting,Consultant,654 Maple Dr,Boston,MA,USA,02101
+Tom Wilson,tom.wilson@enterprise.com,,Enterprise Solutions,VP Engineering,987 Cedar Ln,Denver,CO,USA,80202
+Emily Taylor,emily.taylor@agency.co,555-789-0123,Creative Agency,Art Director,147 Birch Ct,Portland,OR,USA,97201
+  CHRIS ANDERSON  ,chris.anderson@tech.io,(555)890-1234,Tech IO,Developer,258 Spruce Way,Miami,FL,USA,33101
+Lisa Martinez,lisa.martinez@consulting.com,555-901-2345,Martinez Consulting,Senior Consultant,369 Willow Pl,Atlanta,GA,USA,30301
+David Garcia,david.garcia@software.net,555.012.3456,Software Net Inc,QA Engineer,741 Ash Blvd,Phoenix,AZ,USA,85001
+Jennifer Rodriguez,jennifer@startup.io,5551234567,Startup IO,Operations Manager,852 Oak Park,Las Vegas,NV,USA,89101
+  Michael Lee  ,MICHAEL.LEE@COMPANY.COM,(555) 234 5678,Company XYZ,Marketing Director,963 Pine Plaza,Nashville,TN,USA,37201
+Amanda White,amanda.white@agency.co,,Creative Agency,Copywriter,159 Elm Court,Charlotte,NC,USA,28201
