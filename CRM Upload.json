@@ -1,0 +1,656 @@
+{
+  "name": "CRM Upload",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-crm",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -896,
+        96
+      ],
+      "id": "e2ad48ab-ea1d-4df8-9c2f-ed3b2c481a9d",
+      "name": "Webhook",
+      "webhookId": "ec71a812-52d7-4263-a268-41879c7d9cff"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "be4ac285-5577-4e0a-9d37-38a6ab687b8a",
+              "name": "jobId",
+              "value": "={{ $('Webhook').item.json.body.jobId }}",
+              "type": "string"
+            },
+            {
+              "id": "b61aeb95-d5cd-4e7c-b6a6-2f38585d9556",
+              "name": "data",
+              "value": "={{ $('Webhook').item.json.body.data }}",
+              "type": "array"
+            },
+            {
+              "id": "7c7b53f1-b9ad-4c2d-9ffd-5f846b4beffc",
+              "name": "mappings",
+              "value": "={{ $('Webhook').item.json.body.columnMappings }}",
+              "type": "object"
+            },
+            {
+              "id": "030c6cd1-e86a-43e5-83e9-ebff1fb3319b",
+              "name": "options",
+              "value": "={{ $('Webhook').item.json.body.enrichmentOptions }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -672,
+        96
+      ],
+      "id": "3eae7ee1-77a1-4cfb-bcef-735578b75264",
+      "name": "Extract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uuid = require('uuid');\n\n// Get input data\nconst extract = $('Extract').first();\nconst data = extract.json.data\nconst mappings = extract.json.mappings\n\n// Clean each record\nconst cleanedData = data.map((row) => {\n  const cleaned = {};\n  \n  \n  // Apply column mappings and clean data\n  for (const [csvCol, crmField] of Object.entries(mappings)) {\n    let value = row[csvCol];\n\n    if (value && typeof value === \"string\") {\n      // Trim whitespace\n      value = value.trim();\n\n      // Remove extra spaces\n      value = value.replace(/\\s+/g, \" \");\n\n      // Email: lowercase\n      if (crmField === \"email\") {\n        value = value.toLowerCase();\n      }\n\n      // Phone: remove non-digits (basic)\n      if (crmField === \"phone\") {\n        value = value.replace(/[^\\d+\\-() ]/g, \"\");\n      }\n    }\n\n    cleaned[crmField] = value || null;\n  }\n\n  cleaned.id = uuid.v4();\n  return cleaned;\n});\n\nreturn cleanedData.map((item) => ({ json: item }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "f13009cb-721e-45fe-be52-84b165ef14ab",
+      "name": "Data Cleaning"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Data Cleaning').all().map((item) => item.json);\nconst shouldDeduplicate = $(\"Extract\").first().json.options.removeDuplicates;\n\n// If deduplication is disabled, return data as-is\nif (!shouldDeduplicate) {\n  return data.map((item) => ({ json: item}));\n}\n\n// Deduplication logic only runs if enabled\nconst seen = new Map();\nconst unique = [];\nconst duplicates = [];\n\ndata.forEach((row) => {\n  const email = row.email?.toLowerCase();\n\n  if (!email) {\n    unique.push(row);\n    return;\n  }\n\n  if (seen.has(email)) {\n    duplicates.push({\n      ...row,\n      is_duplicate: true,\n      duplicate_of: seen.get(email),\n    });\n  } else {\n    seen.set(email, row.id);\n    unique.push({\n      ...row,\n      is_duplicate: false,\n    });\n  }\n});\n\nreturn unique.map((item) => ({ json: item }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ],
+      "id": "5874cb66-e1eb-41cc-bb94-cc3ceeb32fe1",
+      "name": "Deduplication"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cleaning"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "validating"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "10"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "98bb121d-7ceb-4afb-9a64-921fcb12b20d",
+      "name": "Update Progress",
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').item.json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cleaning"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "cleaning"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "25"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').item.json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a8f00274-5d5f-4d90-b156-a22d36a84730",
+      "name": "Update Progress 1",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.all().map(item => item.json);\nconst shouldVerify = $('Extract').first().json.options.verifyEmails;\n\n// If email verification is disabled, return data as-is\nif (!shouldVerify) {\n  return data.map(item => ({ json: item }));\n}\n\n// Email verification logic only runs if enabled\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nconst verified = data.map(row => ({\n  ...row,\n  email_verified: row.email ? emailRegex.test(row.email) : false,\n  email_deliverable: row.email ? emailRegex.test(row.email) : false // Basic check only\n}));\n\nreturn verified.map(item => ({ json: item }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        288
+      ],
+      "id": "346c5189-dd71-4a55-b949-b3832019a93a",
+      "name": "Email Verification"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.all().map((item) => item.json);\nconst shouldEnrich = $(\"Extract\").first().json.options.enrichCompanyData;\n\n// If company enrichment is disabled, return data as-is\nif (!shouldEnrich) {\n  return data.map((item) => ({ json: item }));\n}\n\n// Company enrichment logic only runs if enabled\nconst enriched = data.map((row) => {\n  let domain = null;\n\n  // Extract domain from email\n  if (row.email) {\n    const match = row.email.match(/@(.+)$/);\n    domain = match ? match[1] : null;\n  }\n\n  return {\n    ...row,\n    company_domain: domain,\n  };\n});\n\nreturn enriched.map((item) => ({ json: item }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        384
+      ],
+      "id": "005617d7-fd0f-4cdc-b6a9-17588f07c3a8",
+      "name": "Company Enrichment"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.all().map(item => item.json);\nconst shouldValidate = $(\"Extract\").first().json.options.validatePhoneNumbers;\n\n// If phone validation is disabled, return data as-is\nif (!shouldValidate) {\n  return data.map(item => ({ json: item }));\n}\n\n// Phone validation logic only runs if enabled\nconst validated = data.map(row => {\n  let phone = row.phone;\n  let isValid = false;\n  \n  if (phone) {\n    // Basic formatting (US numbers)\n    const digits = phone.replace(/\\D/g, '');\n    \n    if (digits.length === 10) {\n      phone = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;\n      isValid = true;\n    } else if (digits.length === 11 && digits[0] === '1') {\n      phone = `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;\n      isValid = true;\n    }\n  }\n  \n  return {\n    ...row,\n    phone_formatted: phone,\n    phone_valid: isValid\n  };\n});\n\nreturn validated.map(item => ({ json: item }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        480
+      ],
+      "id": "58560331-ca86-4b36-9f88-d8c2bb0db5d2",
+      "name": "Phone Validation"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').first().json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cleaning"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "={{ \n$if ($('Extract').item.json.options.removeDuplicates, \"deduplicating\", \"skipped\") \n}}"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "50"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').first().json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        96
+      ],
+      "id": "93ccc84f-cdf1-45bf-8869-12ea55ce801a",
+      "name": "Update Progress 2",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').first().json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "enriching"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "={{ \n$if ($('Extract').item.json.options.verifyEmails, \"enriching_emails\", \"skipped\") \n}}"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "65"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').first().json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        448,
+        192
+      ],
+      "id": "eebbec9c-1609-46ee-b8c2-fceb6cf83a7d",
+      "name": "Update Progress 3",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').first().json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "enriching"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "={{ \n$if ($('Extract').item.json.options.enrichCompanyData, \"enriching_companies\", \"skipped\") \n}}"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "85"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').first().json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        288
+      ],
+      "id": "cb8f6349-7c06-438c-9905-7ee7ab8bf070",
+      "name": "Update Progress 4",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').first().json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cleaning"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "={{ \n$if ($('Extract').item.json.options.validatePhoneNumbers, \"validating_phones\", \"skipped\") \n}}"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "95"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').first().json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        384
+      ],
+      "id": "903c7227-f6ff-4507-ac19-c3bf722c1cec",
+      "name": "Update Progress 5",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "processed_contacts",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        576
+      ],
+      "id": "807312c3-069c-4d21-9b3a-e221a6db6c49",
+      "name": "Save processed contacts",
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "processing_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Extract').first().json.jobId }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "100"
+            },
+            {
+              "fieldId": "processed_rows",
+              "fieldValue": "={{ $('Extract').first().json.data.length }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        576
+      ],
+      "id": "eba64e15-63cd-4e48-8214-adb6ca591985",
+      "name": "Complete",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "OT1tLEvLUUQQE1yZ",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.all().map(item => item.json);\nconst oriData = $('Data Cleaning').all().map(item => item.json);\nconst jobId = $('Extract').first().json.jobId;\n\n// Build final records with all fields\nconst finalRecords = data.map(row => {\n  //const original = \nreturn {\n    // Cleaned fields\n    id: row.id || null,\n    name: row.name || null,\n    email: row.email || null,\n    phone: row.phone || null,\n    company: row.company || null,\n    title: row.title || null,\n    address: row.address || null,\n    city: row.city || null,\n    state: row.state || null,\n    country: row.country || null,\n    zip: row.zip || null,\n    website: row.website || null,\n    \n    // Enriched fields\n    email_verified: row.email_verified || false,\n    email_deliverable: row.email_deliverable || false,\n    company_domain: row.company_domain || null,\n    phone_formatted: row.phone_formatted || null,\n    phone_valid: row.phone_valid || false,\n    \n    // Metadata\n    job_id: jobId,\n    original_data: $('Data Cleaning').first().json.id || null,\n    enriched: true,\n    is_duplicate: row.is_duplicate || false,\n    duplicate_of: row.duplicate_of || null,\n    data_quality_score: 85\n  };\n});\n\nreturn finalRecords.map(item => ({ json: item }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        576
+      ],
+      "id": "248110d8-49ac-45ea-960b-6c317e4e28fc",
+      "name": "Processed data"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "Update Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Cleaning": {
+      "main": [
+        [
+          {
+            "node": "Update Progress 1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Deduplication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplication": {
+      "main": [
+        [
+          {
+            "node": "Email Verification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Progress 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Progress": {
+      "main": [
+        [
+          {
+            "node": "Data Cleaning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Verification": {
+      "main": [
+        [
+          {
+            "node": "Company Enrichment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Progress 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Phone Validation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Progress 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone Validation": {
+      "main": [
+        [
+          {
+            "node": "Update Progress 5",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Processed data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save processed contacts": {
+      "main": [
+        [
+          {
+            "node": "Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processed data": {
+      "main": [
+        [
+          {
+            "node": "Save processed contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9cd062aa-eef7-4ec7-859a-338d12157c7b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1929f370a1c5d38ec6db461656785c75256eeb43b9966663030b64388f9b79ee"
+  },
+  "id": "pFZviah0IE0mcVg-8SOIu",
+  "tags": []
+}
