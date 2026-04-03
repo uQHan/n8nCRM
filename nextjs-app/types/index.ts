@@ -32,3 +32,17 @@ export type ProcessingStage =
   | 'validating_phones'
   | 'completed'
   | 'failed';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface ChatSession {
+  id: string;
+  messages: ChatMessage[];
+  created_at: string;
+  updated_at: string;
+}

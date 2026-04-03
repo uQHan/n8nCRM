@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS processed_contacts (
   
   -- Cleaned fields
   name TEXT,
-  email TEXT,
+  email TEXT UNIQUE NOT NULL,
   phone TEXT,
   company TEXT,
   title TEXT,
@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS processed_contacts (
   -- Enriched fields
   email_verified BOOLEAN DEFAULT FALSE,
   email_deliverable BOOLEAN,
+  company_domain TEXT,
   company_size TEXT,
   company_industry TEXT,
   company_location TEXT,
@@ -110,6 +111,36 @@ CREATE INDEX IF NOT EXISTS idx_enrichment_logs_job_id ON enrichment_logs(job_id)
 CREATE INDEX IF NOT EXISTS idx_enrichment_logs_contact_id ON enrichment_logs(contact_id);
 
 -- =====================================================
+-- Table: chat_sessions
+-- Stores chat session metadata
+-- =====================================================
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  messages JSONB DEFAULT '[]',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for faster queries
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_created_at ON chat_sessions(created_at DESC);
+
+-- =====================================================
+-- Table: chat_messages
+-- Stores individual chat messages for chat sessions
+-- =====================================================
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC);
+
+-- =====================================================
 -- Function: Update updated_at timestamp automatically
 -- =====================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -131,6 +162,11 @@ CREATE TRIGGER update_processed_contacts_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_chat_sessions_updated_at
+  BEFORE UPDATE ON chat_sessions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
 -- =====================================================
 -- Enable Row Level Security (RLS)
 -- Note: For POC without auth, we'll allow all operations
@@ -140,12 +176,16 @@ ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE raw_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processed_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrichment_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- For POC: Allow all operations (INSECURE - only for development)
 CREATE POLICY "Allow all on processing_jobs" ON processing_jobs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on raw_contacts" ON raw_contacts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on processed_contacts" ON processed_contacts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on enrichment_logs" ON enrichment_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on chat_sessions" ON chat_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on chat_messages" ON chat_messages FOR ALL USING (true) WITH CHECK (true);
 
 -- =====================================================
 -- Enable Realtime for processing_jobs table
