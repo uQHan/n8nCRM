@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { parseFile, autoDetectMappings, downloadCSV } from '@/lib/fileParser';
 import { EnrichmentOptions, ProcessingJob, ProcessingStage } from '@/types';
 import { createClient } from '@/utils/supabase/client';
+import ChatWidget from './components/ChatWidget';
+
 
 type ViewStage = 'upload' | 'preview' | 'processing' | 'results';
 
@@ -184,9 +186,11 @@ export default function Home() {
       {/* Header with auth placeholder */}
       <header className="border-b bg-white dark:bg-gray-800 shadow-sm">
         <div className="container mx-auto flex justify-between items-center py-4 px-6">
-          <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-            CRM Data Cleaner
-          </h1>
+          <a href="/">
+            <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+              CRM Data Cleaner
+            </h1>
+          </a>
           {/* Future: Auth components will go here */}
           <div className="auth-placeholder"></div>
         </div>
@@ -580,6 +584,9 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Chat Widget */}
+      <ChatWidget />
     </div>
   );
 }
