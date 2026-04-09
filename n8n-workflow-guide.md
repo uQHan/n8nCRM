@@ -6,6 +6,9 @@ This guide explains how to create the n8n workflows for CRM data cleaning and en
 
 The n8n workflow receives data from the Next.js frontend, processes it through multiple stages, and updates Supabase with progress and results.
 
+
+## File Upload, cleaning, enrichment Workflow
+
 ## Workflow Architecture
 
 ```
@@ -15,30 +18,25 @@ Parse & Validate Data
      ↓
 Create Job Records → Update Supabase (job created)
      ↓
-Stage 1: Data Cleaning
-     ├── Trim whitespace
-     ├── Standardize formats
-     └── Update progress (25%)
+Data Cleaning (Code)
      ↓
-Stage 2: Deduplication (if enabled)
-     ├── Find duplicates
-     ├── Merge records
-     └── Update progress (50%)
+Update Progress (25%)
      ↓
-Stage 3: Email Verification (if enabled)
-     ├── Validate format
-     ├── Check deliverability
-     └── Update progress (65%)
+Deduplication (Code - conditional inside)
      ↓
-Stage 4: Company Enrichment (if enabled)
-     ├── Extract domain from email
-     ├── Lookup company data
-     └── Update progress (80%)
+Update Progress (50%)
      ↓
-Stage 5: Phone Validation (if enabled)
-     ├── Format phone numbers
-     ├── Validate numbers
-     └── Update progress (95%)
+Email Verification (Code - conditional inside)
+     ↓
+Update Progress (65%)
+     ↓
+Company Enrichment (Code - conditional inside)
+     ↓
+Update Progress (80%)
+     ↓
+Phone Validation (Code - conditional inside)
+     ↓
+Update Progress (95%)
      ↓
 Save Results → Supabase
      ↓
@@ -72,7 +70,7 @@ This receives data from Next.js in this format:
 }
 ```
 
-### Step 2: Initialize Variables
+### Step 2: Extract Variables
 
 Add **Set** node to extract variables:
 ```javascript
@@ -140,6 +138,9 @@ const cleanedData = data.map(row => {
     cleaned[crmField] = value || null;
   }
   
+  // Add unique ID during cleaning
+  cleaned.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
   return cleaned;
 });
 
@@ -160,14 +161,17 @@ Add **Supabase** node:
 
 ### Step 6: Deduplication (Conditional)
 
-Add **IF** node to check if deduplication is enabled:
-- **Condition**: `{{ $node["Initialize"].json.options.removeDuplicates }} === true`
-
-**True Branch** - Add **Code** node:
+Add **Code** node with conditional logic inside:
 ```javascript
 const data = $input.all().map(item => item.json);
+const shouldDeduplicate = $('Extract').first().json.options.removeDuplicates;
 
-// Simple deduplication by email
+// If deduplication is disabled, return data as-is
+if (!shouldDeduplicate) {
+  return data.map(item => ({ json: item }));
+}
+
+// Deduplication logic only runs if enabled
 const seen = new Map();
 const unique = [];
 const duplicates = [];
@@ -187,11 +191,9 @@ data.forEach(row => {
       duplicate_of: seen.get(email)
     });
   } else {
-    const id = `${Date.now()}-${Math.random()}`;
-    seen.set(email, id);
+    seen.set(email, row.id);
     unique.push({
       ...row,
-      id,
       is_duplicate: false
     });
   }
@@ -210,44 +212,29 @@ Update Supabase progress:
 
 ### Step 7: Email Verification (Conditional)
 
-Add **IF** node: `{{ $node["Initialize"].json.options.verifyEmails }} === true`
-
-**True Branch** - Add **HTTP Request** node for each record:
-
-For a free solution, add **Code** node for basic validation:
+Add **Code** node with conditional logic inside:
 ```javascript
 const data = $input.all().map(item => item.json);
+const shouldVerify = $('Extract').first().json.options.verifyEmails;
 
+// If email verification is disabled, return data as-is
+if (!shouldVerify) {
+  return data.map(item => ({ json: item }));
+}
+
+// Email verification logic only runs if enabled
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const verified = data.map(row => {
-  const email = row.email;
-  const isValid = email && emailRegex.test(email);
-  
-  return {
-    ...row,
-    email_verified: isValid,
-    email_deliverable: isValid // Basic check only
-  };
-});
+const verified = data.map(row => ({
+  ...row,
+  email_verified: row.email ? emailRegex.test(row.email) : false,
+  email_deliverable: row.email ? emailRegex.test(row.email) : false // Basic check only
+}));
 
 return verified.map(item => ({ json: item }));
 ```
 
-For production, use **Hunter.io** or **Abstract API**:
-```javascript
-// HTTP Request node setup
-{
-  "method": "GET",
-  "url": "https://api.hunter.io/v2/email-verifier",
-  "options": {
-    "qs": {
-      "email": "={{ $json.email }}",
-      "api_key": "YOUR_API_KEY"
-    }
-  }
-}
-```
+**Note**: For production with external APIs like **Hunter.io** or **Abstract API**, you can integrate HTTP request nodes after this code node to enrich with more detailed verification results.
 
 Update progress:
 ```json
@@ -259,12 +246,17 @@ Update progress:
 
 ### Step 8: Company Enrichment (Conditional)
 
-Add **IF** node: `{{ $node["Initialize"].json.options.enrichCompanyData }} === true`
-
-**True Branch** - Add **Code** node to extract domains:
+Add **Code** node with conditional logic inside:
 ```javascript
 const data = $input.all().map(item => item.json);
+const shouldEnrich = $('Extract').first().json.options.enrichCompanyData;
 
+// If company enrichment is disabled, return data as-is
+if (!shouldEnrich) {
+  return data.map(item => ({ json: item }));
+}
+
+// Company enrichment logic only runs if enabled
 const enriched = data.map(row => {
   let domain = null;
   
@@ -283,21 +275,7 @@ const enriched = data.map(row => {
 return enriched.map(item => ({ json: item }));
 ```
 
-Then add **HTTP Request** for Clearbit or similar:
-```javascript
-{
-  "method": "GET",
-  "url": "https://company.clearbit.com/v2/companies/find",
-  "options": {
-    "qs": {
-      "domain": "={{ $json.company_domain }}"
-    },
-    "headers": {
-      "Authorization": "Bearer YOUR_API_KEY"
-    }
-  }
-}
-```
+**Note**: For production, integrate HTTP request nodes (e.g., Clearbit API) after this code node to fetch actual company data using the extracted domain.
 
 Update progress:
 ```json
@@ -309,12 +287,17 @@ Update progress:
 
 ### Step 9: Phone Validation (Conditional)
 
-Add **IF** node: `{{ $node["Initialize"].json.options.validatePhoneNumbers }} === true`
-
-**True Branch** - Add **Code** node:
+Add **Code** node with conditional logic inside:
 ```javascript
 const data = $input.all().map(item => item.json);
+const shouldValidate = $('Extract').first().json.options.validatePhoneNumbers;
 
+// If phone validation is disabled, return data as-is
+if (!shouldValidate) {
+  return data.map(item => ({ json: item }));
+}
+
+// Phone validation logic only runs if enabled
 const validated = data.map(row => {
   let phone = row.phone;
   let isValid = false;
@@ -350,32 +333,70 @@ Update progress:
 }
 ```
 
-### Step 10: Save to Supabase
+### Step 10: Prepare Data for Insert
+
+Add **Code** node to construct final records with all required fields:
+```javascript
+const data = $input.all().map(item => item.json);
+const jobId = $('Extract').first().json.jobId;
+
+// Build final records with only schema-matching fields
+const finalRecords = data.map(row => {
+  return {
+    // Cleaned fields
+    name: row.name || null,
+    email: row.email || null,
+    phone: row.phone || null,
+    company: row.company || null,
+    title: row.title || null,
+    address: row.address || null,
+    city: row.city || null,
+    state: row.state || null,
+    country: row.country || null,
+    zip: row.zip || null,
+    website: row.website || null,
+    
+    // Enriched fields
+    email_verified: row.email_verified || false,
+    email_deliverable: row.email_deliverable || false,
+    company_domain: row.company_domain || null,
+    phone_formatted: row.phone_formatted || null,
+    phone_valid: row.phone_valid || false,
+    
+    // Metadata
+    job_id: jobId,
+    enriched: true,
+    is_duplicate: row.is_duplicate || false,
+    duplicate_of: row.duplicate_of || null,
+    data_quality_score: 85
+  };
+});
+
+return finalRecords.map(item => ({ json: item }));
+```
+
+### Step 11: Save to Supabase
 
 Add **Supabase** node:
 - **Operation**: Insert
 - **Table**: `processed_contacts`
-- **Fields**: Map all fields from the processed data
-- **Additional Fields**:
-  ```json
-  {
-    "job_id": "{{ $node['Initialize'].json.jobId }}",
-    "enriched": true,
-    "data_quality_score": 85
-  }
-  ```
+- **Mapping**: Auto map (automatically maps all returned fields from the Code node)
 
-### Step 11: Mark Job Complete
+### Step 12: Mark Job Complete
 
 Add **Supabase** node:
-```json
-{
-  "status": "completed",
-  "current_stage": "completed",
-  "progress": 100,
-  "processed_rows": "={{ $json.length }}"
-}
-```
+- **Operation**: Update
+- **Table**: `processing_jobs`
+- **Update Key**: `id`
+- **Update Value**: `{{ $node['Extract'].json.jobId }}`
+- **Fields**:
+  ```json
+  {
+    "status": "completed",
+    "current_stage": "completed",
+    "progress": 100
+  }
+  ```
 
 ## Error Handling
 

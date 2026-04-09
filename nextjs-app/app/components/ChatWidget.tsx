@@ -174,7 +174,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
             {isOpen && (
                <div className="w-96 h-96 md:w-96 md:h-96 bg-white dark:bg-gray-800 rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-700 mb-3">
                   {/* Header */}
-                  <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 rounded-t-lg flex justify-between items-center">
+                  <div className="bg-linear-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 rounded-t-lg flex justify-between items-center">
                      <div>
                         <h3 className="font-bold text-lg">CRM AI Assistant</h3>
                         <p className="text-xs text-indigo-100">Powered by n8n</p>

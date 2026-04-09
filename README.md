@@ -15,6 +15,7 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
   - Duplicate removal
 - 📊 **Real-time Progress**: Live updates using Supabase Realtime
 - 💾 **Download Results**: Export cleaned data as CSV
+- 💬 **CRM Chat Assistant**: Ask for customer contacts and request contact updates via chat (powered by n8n + Supabase)
 
 ## Architecture
 
@@ -52,6 +53,7 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-anon-key
    NEXT_PUBLIC_N8N_WEBHOOK_URL=http://localhost:5678/webhook/process-crm
+   NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL=http://localhost:5678/webhook/chat
    ```
 
 ### 3. Install Dependencies
@@ -86,6 +88,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
    - **Data cleaning nodes** (see `n8n-workflow-guide.md` for details)
    - **Supabase nodes** to update job progress and store results
 
+4. (Optional) Create a second workflow for the **CRM Chat Assistant**:
+   - **Webhook trigger** at `/webhook/chat` (or set `NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL` to your n8n webhook URL)
+   - Read chat input + session context
+   - **Fetch customer contacts** from Supabase (typically `processed_contacts`)
+   - **Update contact data** in Supabase when the user asks for changes
+   - Return JSON in the shape: `{ "output": "...assistant reply..." }`
+
 ## Project Structure
 
 ```
@@ -116,6 +125,24 @@ nextjs-app/
 5. **Start Processing**: Click "Start Processing" to begin
 6. **Monitor Progress**: Watch real-time updates as n8n processes your data
 7. **Download Results**: Get your cleaned CSV file
+8. **Chat With CRM Assistant**: Use the bottom-right chat widget to retrieve customer contacts and request updates (the chat workflow runs in n8n)
+
+## Chat Assistant (Contacts)
+
+The app includes a persistent chat widget (bottom-right) that:
+
+- Creates a chat session in Supabase (`chat_sessions`)
+- Stores each message in Supabase (`chat_messages`)
+- Sends your message to n8n via `NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL`
+
+Typical chat requests you can support in n8n:
+
+- “Show me the latest 10 processed contacts”
+- “Find contact by email john@acme.com”
+- “Update John’s phone to +1 555-123-4567”
+- “Mark this contact as duplicate”
+
+Note: The exact behavior depends on how you implement the n8n chat workflow (the frontend posts `sessionId`, `chatInput`, and recent messages for context).
 
 ## Data Processing Flow
 
@@ -158,6 +185,7 @@ nextjs-app/
 - Authentication is not implemented (placeholder exists)
 - File size limit: 10MB (can be adjusted)
 - Preview shows first 50 rows only
+- Chat tables use permissive RLS policies for the POC (tighten for production)
 
 ## License
 

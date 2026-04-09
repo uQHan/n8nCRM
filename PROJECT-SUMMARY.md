@@ -44,16 +44,19 @@ This matches exactly how professional CRM data platforms work (e.g., ZoomInfo, C
    - ✅ Processing status with real-time updates
    - ✅ Results display with statistics
    - ✅ Download cleaned CSV
+   - ✅ CRM Chat Assistant widget (retrieve contacts + request updates via chat)
    - ✅ Auth placeholder for future expansion
    - ✅ Responsive design (mobile-friendly)
    - ✅ Dark mode support
 
 #### 2. **Backend/Database (Supabase)**
-   - ✅ Complete database schema with 4 tables:
+    - ✅ Complete database schema with 6 tables:
      - `processing_jobs` - Track workflow status
      - `raw_contacts` - Original uploaded data
      - `processed_contacts` - Cleaned/enriched data
      - `enrichment_logs` - Audit trail
+       - `chat_sessions` - Chat session metadata
+       - `chat_messages` - Individual chat messages
    - ✅ Real-time broadcasting enabled
    - ✅ Row-level security (configured for POC)
    - ✅ Indexes for performance
@@ -70,6 +73,7 @@ This matches exactly how professional CRM data platforms work (e.g., ZoomInfo, C
      5. Company Enrichment
      6. Phone Validation
      7. Save Results
+   - ✅ (Optional) Chat workflow concept: get customer contacts and update contact data via chat messages
    - ✅ Error handling strategy
    - ✅ Progress tracking implementation
    - ✅ API integration examples
@@ -89,6 +93,7 @@ This matches exactly how professional CRM data platforms work (e.g., ZoomInfo, C
    - ✅ n8n Workflow Guide (detailed)
    - ✅ Database schema with comments
    - ✅ Sample data for testing
+   - ✅ Chat Assistant section (contacts retrieval + updates)
 
 ---
 
