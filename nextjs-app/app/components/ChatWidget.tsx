@@ -111,7 +111,8 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
             },
             body: JSON.stringify({
                sessionId,
-               message: inputValue,
+               action: "sendMessage",
+               chatInput: inputValue,
                context: {
                   previousMessages: messages.slice(-5), // Send last 5 messages for context
                },
@@ -126,7 +127,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
          const assistantMessage: ChatMessage = {
             id: `msg_${Date.now()}_response`,
             role: 'assistant',
-            content: data.response || data.message || 'Unable to process your request',
+            content: data.output || 'Unable to process your request',
             timestamp: new Date().toISOString(),
          };
 
