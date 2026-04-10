@@ -325,16 +325,16 @@ export default function Home() {
                       className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                     >
                       <option value={header}>{header}</option>
-                      <option value="name">Name</option>
-                      <option value="email">Email</option>
-                      <option value="phone">Phone</option>
-                      <option value="company">Company</option>
-                      <option value="title">Job Title</option>
-                      <option value="address">Address</option>
-                      <option value="city">City</option>
-                      <option value="state">State</option>
-                      <option value="country">Country</option>
-                      <option value="website">Website</option>
+                      <option value="name">name</option>
+                      <option value="email">email</option>
+                      <option value="phone">phone</option>
+                      <option value="company">company</option>
+                      <option value="title">title</option>
+                      <option value="address">address</option>
+                      <option value="city">city</option>
+                      <option value="state">state</option>
+                      <option value="country">country</option>
+                      <option value="website">website</option>
                     </select>
                   </div>
                 ))}
