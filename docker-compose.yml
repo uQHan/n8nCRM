@@ -45,22 +45,33 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-  # nextjs:
-  #   build:
-  #     context: ./nextjs-app
-  #     dockerfile: Dockerfile
-  #   restart: always
-  #   environment:
-  #     - DATABASE_URL=postgresql://${POSTGRES_NON_ROOT_USER}:${POSTGRES_NON_ROOT_PASSWORD}@postgres:5432/${POSTGRES_DB}
-  #     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-  #     - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-  #     - N8N_WEBHOOK_URL=http://n8n:5678
-  #   ports:
-  #     - 3000:3000
-  #   depends_on:
-  #     - postgres
-  #     - n8n
-  #   volumes:
-  #     - ./nextjs-app:/app
-  #     - /app/node_modules
-  #     - /app/.next
+
+  spring-backend:
+    build:
+      context: ./n8ncrmbackend
+    restart: always
+    environment:
+      # Point these at your Supabase Postgres connection (recommended)
+      - SUPABASE_DB_JDBC_URL
+      - SUPABASE_DB_USER
+      - SUPABASE_DB_PASSWORD
+      # n8n webhooks (internal service-to-service)
+      - N8N_CRM_WEBHOOK_URL=http://n8n:5678/webhook/process-crm
+      - N8N_CHAT_WEBHOOK_URL=http://n8n:5678/webhook/chat
+      - APP_CORS_ALLOWED_ORIGINS=http://localhost:3000
+    ports:
+      - 8080:8080
+    depends_on:
+      - n8n
+
+  nextjs:
+    build:
+      context: ./nextjs-app
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
+    ports:
+      - 3000:3000
+    depends_on:
+      - spring-backend
