@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { ChatMessage, ChatSession } from '@/types';
 
 interface ChatWidgetProps {
@@ -17,7 +16,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    const [sessionId, setSessionId] = useState<string>(initialSessionId || '');
    const [error, setError] = useState<string | null>(null);
    const messagesEndRef = useRef<HTMLDivElement>(null);
-   const supabase = createClient();
+   const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
 
    // Initialize session on mount
    useEffect(() => {
@@ -36,15 +35,12 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    // Create new chat session
    const createNewSession = async () => {
       try {
-         const { data, error: dbError } = await supabase
-            .from('chat_sessions')
-            .insert({
-               messages: [],
-            })
-            .select()
-            .single();
-
-         if (dbError) throw dbError;
+         const res = await fetch(`${backendBaseUrl}/api/chat/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+         });
+         if (!res.ok) throw new Error('Failed to create new chat session');
+         const data = await res.json();
 
          setSessionId(data.id);
          setMessages([]);
@@ -60,15 +56,18 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
       if (!sessionId) return;
 
       try {
-         const { data, error: dbError } = await supabase
-            .from('chat_sessions')
-            .select('messages')
-            .eq('id', sessionId)
-            .single();
+         const res = await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}/messages`);
+         if (!res.ok) throw new Error('Failed to load chat history');
+         const data = await res.json();
 
-         if (dbError) throw dbError;
+         const normalized: ChatMessage[] = (data || []).map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+         }));
 
-         setMessages(data?.messages || []);
+         setMessages(normalized);
       } catch (err) {
          console.error('Failed to load chat history:', err);
       }
@@ -92,30 +91,13 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
       setError(null);
 
       try {
-         // Save user message to Supabase
-         await supabase
-            .from('chat_messages')
-            .insert({
-               session_id: sessionId,
-               role: 'user',
-               content: inputValue,
-            });
-
-         // Send to n8n webhook
-         const webhookUrl = process.env.NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL || 'http://localhost:5678/webhook/chat';
-
-         const response = await fetch(webhookUrl, {
+         const response = await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}/messages`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-               sessionId,
-               action: "sendMessage",
-               chatInput: inputValue,
-               context: {
-                  previousMessages: messages.slice(-5), // Send last 5 messages for context
-               },
+               content: inputValue,
             }),
          });
 
@@ -125,22 +107,13 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
 
          const data = await response.json();
          const assistantMessage: ChatMessage = {
-            id: `msg_${Date.now()}_response`,
+            id: data.id,
             role: 'assistant',
-            content: data.output || 'Unable to process your request',
-            timestamp: new Date().toISOString(),
+            content: data.content || 'Unable to process your request',
+            timestamp: data.timestamp || new Date().toISOString(),
          };
 
          setMessages(prev => [...prev, assistantMessage]);
-
-         // Save assistant message to Supabase
-         await supabase
-            .from('chat_messages')
-            .insert({
-               session_id: sessionId,
-               role: 'assistant',
-               content: assistantMessage.content,
-            });
 
       } catch (err) {
          setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -153,11 +126,9 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    // Clear chat history
    const handleClearChat = async () => {
       try {
-         await supabase
-            .from('chat_messages')
-            .delete()
-            .eq('session_id', sessionId);
-
+         if (sessionId) {
+            await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+         }
          setMessages([]);
          await createNewSession();
       } catch (err) {
@@ -224,7 +195,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
                                           : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-none'
                                        }`}
                                  >
-                                    <p className="text-sm whitespace-pre-wrap break-words">
+                                    <p className="text-sm whitespace-pre-wrap wrap-break-word">
                                        {message.content}
                                     </p>
                                     <span

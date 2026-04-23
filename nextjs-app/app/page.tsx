@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { parseFile, autoDetectMappings, downloadCSV } from '@/lib/fileParser';
 import { EnrichmentOptions, ProcessingJob, ProcessingStage } from '@/types';
-import { createClient } from '@/utils/supabase/client';
 import ChatWidget from './components/ChatWidget';
 
 
@@ -25,7 +24,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const pollRef = useRef<number | null>(null);
+
+  const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
 
   // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,60 +68,12 @@ export default function Home() {
     setViewStage('processing');
 
     try {
-      // Create processing job in Supabase
-      const { data: job, error: jobError } = await supabase
-        .from('processing_jobs')
-        .insert({
-          status: 'uploading',
-          progress: 0,
-          current_stage: 'uploaded',
-          total_rows: parsedData.totalRows,
-          processed_rows: 0,
-          error_count: 0,
-        })
-        .select()
-        .single();
-
-      if (jobError) throw jobError;
-
-      setProcessingJob(job);
-
-      // Subscribe to job updates via Supabase Realtime
-      const channel = supabase
-        .channel(`processing_job_${job.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'processing_jobs',
-            filter: `id=eq.${job.id}`,
-          },
-          (payload) => {
-            console.log('Job update:', payload);
-            setProcessingJob(payload.new as ProcessingJob);
-
-            if (payload.new.status === 'completed') {
-              // Fetch processed data
-              fetchProcessedData(job.id);
-            } else if (payload.new.status === 'failed') {
-              setError('Processing failed. Please try again.');
-              setIsProcessing(false);
-            }
-          }
-        )
-        .subscribe();
-
-      // Send data to n8n webhook
-      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/process-crm';
-      
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(`${backendBaseUrl}/api/crm/jobs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          jobId: job.id,
           data: parsedData.rows,
           columnMappings,
           enrichmentOptions,
@@ -128,9 +81,34 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to start processing');
-      }
+      if (!response.ok) throw new Error('Failed to start processing');
+
+      const job = (await response.json()) as ProcessingJob;
+      setProcessingJob(job);
+
+      // Poll for job updates (Spring owns DB state)
+      if (pollRef.current) window.clearInterval(pollRef.current);
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const jobRes = await fetch(`${backendBaseUrl}/api/crm/jobs/${job.id}`);
+          if (!jobRes.ok) return;
+          const latest = (await jobRes.json()) as ProcessingJob;
+          setProcessingJob(latest);
+
+          if (latest.status === 'completed') {
+            window.clearInterval(pollRef.current!);
+            pollRef.current = null;
+            fetchProcessedData(job.id);
+          } else if (latest.status === 'failed') {
+            window.clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setError('Processing failed. Please try again.');
+            setIsProcessing(false);
+          }
+        } catch {
+          // ignore transient polling errors
+        }
+      }, 1000);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start processing');
@@ -142,12 +120,9 @@ export default function Home() {
   // Fetch processed data
   const fetchProcessedData = async (jobId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('processed_contacts')
-        .select('*')
-        .eq('job_id', jobId);
-
-      if (error) throw error;
+      const res = await fetch(`${backendBaseUrl}/api/crm/jobs/${jobId}/processed-contacts`);
+      if (!res.ok) throw new Error('Failed to fetch processed data');
+      const data = await res.json();
 
       setProcessedData(data || []);
       setViewStage('results');
@@ -168,6 +143,10 @@ export default function Home() {
 
   // Reset to start over
   const handleReset = () => {
+    if (pollRef.current) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     setViewStage('upload');
     setSelectedFile(null);
     setParsedData(null);
@@ -180,6 +159,12 @@ export default function Home() {
       fileInputRef.current.value = '';
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
