@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "processed_contacts")
@@ -31,19 +32,38 @@ public class ProcessedContact {
 	@Column(name = "original_data")
 	private String originalData;
 
+	@Size(max = 500)
 	private String name;
 
+	@Size(max = 320)
 	@Column(nullable = false, unique = true)
 	private String email;
 
+	@Size(max = 50)
 	private String phone;
+
+	@Size(max = 500)
 	private String company;
+
+	@Size(max = 255)
 	private String title;
+
+	@Size(max = 1000)
 	private String address;
+
+	@Size(max = 255)
 	private String city;
+
+	@Size(max = 255)
 	private String state;
+
+	@Size(max = 255)
 	private String country;
+
+	@Size(max = 20)
 	private String zip;
+
+	@Size(max = 2048)
 	private String website;
 
 	@Column(name = "email_verified")
@@ -52,9 +72,27 @@ public class ProcessedContact {
 	@Column(name = "email_deliverable")
 	private Boolean emailDeliverable;
 
+	@Size(max = 500)
 	@Column(name = "company_domain")
 	private String companyDomain;
 
+	// --- Fields that were missing from the entity but present in the DB schema ---
+
+	@Size(max = 255)
+	@Column(name = "company_size")
+	private String companySize;
+
+	@Size(max = 255)
+	@Column(name = "company_industry")
+	private String companyIndustry;
+
+	@Size(max = 500)
+	@Column(name = "company_location")
+	private String companyLocation;
+
+	// --- End of previously missing fields ---
+
+	@Size(max = 50)
 	@Column(name = "phone_formatted")
 	private String phoneFormatted;
 
@@ -208,6 +246,30 @@ public class ProcessedContact {
 
 	public void setCompanyDomain(String companyDomain) {
 		this.companyDomain = companyDomain;
+	}
+
+	public String getCompanySize() {
+		return companySize;
+	}
+
+	public void setCompanySize(String companySize) {
+		this.companySize = companySize;
+	}
+
+	public String getCompanyIndustry() {
+		return companyIndustry;
+	}
+
+	public void setCompanyIndustry(String companyIndustry) {
+		this.companyIndustry = companyIndustry;
+	}
+
+	public String getCompanyLocation() {
+		return companyLocation;
+	}
+
+	public void setCompanyLocation(String companyLocation) {
+		this.companyLocation = companyLocation;
 	}
 
 	public String getPhoneFormatted() {

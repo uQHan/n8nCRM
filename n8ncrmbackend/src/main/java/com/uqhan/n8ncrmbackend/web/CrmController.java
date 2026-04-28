@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.uqhan.n8ncrmbackend.entity.ProcessedContact;
 import com.uqhan.n8ncrmbackend.entity.ProcessingJob;
 import com.uqhan.n8ncrmbackend.repo.ProcessedContactRepository;
 import com.uqhan.n8ncrmbackend.repo.ProcessingJobRepository;
 import com.uqhan.n8ncrmbackend.service.CrmJobService;
+import com.uqhan.n8ncrmbackend.web.dto.ApiProcessedContact;
 import com.uqhan.n8ncrmbackend.web.dto.ApiProcessingJob;
 import com.uqhan.n8ncrmbackend.web.dto.CrmStartJobRequest;
 
@@ -55,8 +55,11 @@ public class CrmController {
 		return ApiProcessingJob.from(job);
 	}
 
+	// Issue #7: Return DTOs instead of raw JPA entities
 	@GetMapping("/jobs/{jobId}/processed-contacts")
-	public List<ProcessedContact> getProcessedContacts(@PathVariable UUID jobId) {
-		return contactRepository.findByJob_IdOrderByCreatedAtAsc(jobId);
+	public List<ApiProcessedContact> getProcessedContacts(@PathVariable UUID jobId) {
+		return contactRepository.findByJob_IdOrderByCreatedAtAsc(jobId).stream()
+				.map(ApiProcessedContact::from)
+				.toList();
 	}
 }

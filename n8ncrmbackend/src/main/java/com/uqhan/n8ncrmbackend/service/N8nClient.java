@@ -1,9 +1,12 @@
 package com.uqhan.n8ncrmbackend.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.ClientHttpRequestFactories;
+import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -11,6 +14,10 @@ import org.springframework.web.client.RestClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Issue #5: Added connection and read timeouts so webhook calls don't
+ * block the thread indefinitely when n8n is slow or unavailable.
+ */
 @Component
 public class N8nClient {
 	private final RestClient restClient;
@@ -21,9 +28,16 @@ public class N8nClient {
 	public N8nClient(
 			ObjectMapper objectMapper,
 			@Value("${n8n.webhook.crm.url}") String crmWebhookUrl,
-			@Value("${n8n.webhook.chat.url}") String chatWebhookUrl
+			@Value("${n8n.webhook.chat.url}") String chatWebhookUrl,
+			@Value("${n8n.webhook.connect-timeout:5s}") Duration connectTimeout,
+			@Value("${n8n.webhook.read-timeout:60s}") Duration readTimeout
 	) {
-		this.restClient = RestClient.create();
+		var settings = ClientHttpRequestFactorySettings.DEFAULTS
+				.withConnectTimeout(connectTimeout)
+				.withReadTimeout(readTimeout);
+		this.restClient = RestClient.builder()
+				.requestFactory(ClientHttpRequestFactories.get(settings))
+				.build();
 		this.objectMapper = objectMapper;
 		this.crmWebhookUrl = crmWebhookUrl;
 		this.chatWebhookUrl = chatWebhookUrl;
