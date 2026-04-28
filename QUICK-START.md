@@ -5,22 +5,41 @@ This is a step-by-step guide to get your CRM Data Cleaning & Enrichment project 
 ## Prerequisites
 
 - Node.js 18+ installed
-- Supabase account
+- Java 17+ installed
+- A Postgres database (Supabase Postgres recommended)
 - Basic understanding of Next.js and n8n
 
 ## 🚀 Quick Start (5 minutes)
 
-### Step 1: Supabase Setup (2 minutes)
+### Step 1: Database Setup (Supabase Postgres) (2 minutes)
 
 1. Go to [supabase.com](https://supabase.com) and create a new project
 2. Wait for the project to be provisioned
-3. Go to **Settings** → **API** and copy:
-   - Project URL
-   - Anon/Public key
-4. Go to **SQL Editor** and run the contents of `supabase-schema.sql`
-5. Go to **Database** → **Replication** → Enable `processing_jobs` table
+3. Go to **SQL Editor** and run the contents of `supabase-schema.sql`
 
-### Step 2: Frontend Setup (2 minutes)
+### Step 2: Backend Setup (Spring Boot) (2 minutes)
+
+Set env vars for the backend (PowerShell example):
+
+```powershell
+$env:SUPABASE_DB_JDBC_URL="jdbc:postgresql://<host>:5432/postgres?sslmode=require"
+$env:SUPABASE_DB_USER="postgres"
+$env:SUPABASE_DB_PASSWORD="<password>"
+
+$env:N8N_CRM_WEBHOOK_URL="http://localhost:5678/webhook/process-crm"
+$env:N8N_CHAT_WEBHOOK_URL="http://localhost:5678/webhook/chat"
+```
+
+Run the backend:
+
+```powershell
+cd n8ncrmbackend
+./gradlew bootRun
+```
+
+Backend will run at http://localhost:8080
+
+### Step 3: Frontend Setup (2 minutes)
 
 ```bash
 # Navigate to the Next.js app
@@ -29,9 +48,8 @@ cd nextjs-app
 # Create environment file
 cp .env.local.example .env.local
 
-# Edit .env.local and add your Supabase credentials
-# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-# NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-anon-key
+# Edit .env.local and point to Spring
+# NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
 
 # Install dependencies (already done if you followed previous steps)
 npm install
@@ -42,7 +60,7 @@ npm run dev
 
 Open http://localhost:3000 - you should see the CRM Data Cleaner!
 
-### Step 3: Test Without n8n (1 minute)
+### Step 4: Test Without n8n (1 minute)
 
 You can test the file upload and preview features right now without n8n:
 
@@ -54,7 +72,7 @@ You can test the file upload and preview features right now without n8n:
    - ✓ Column mapping
    - ✓ Enrichment options
 
-**Note**: The "Start Processing" button won't work yet - you need n8n for that.
+**Note**: The "Start Processing" button triggers n8n via Spring, so you still need n8n for the full pipeline.
 
 ---
 
@@ -62,7 +80,7 @@ You can test the file upload and preview features right now without n8n:
 
 If you want the complete workflow with actual data processing:
 
-### Step 4: Install n8n
+### Step 5: Install n8n
 
 ```bash
 # Install n8n globally
@@ -74,20 +92,14 @@ n8n start
 
 n8n will start at http://localhost:5678
 
-### Step 5: Create the n8n Workflow
+### Step 6: Create the n8n Workflow
 
 1. Open http://localhost:5678
 2. Create a new workflow
 3. Follow the detailed instructions in `n8n-workflow-guide.md`
 4. Or import a pre-built workflow (if provided)
 
-### Step 6: Configure Supabase in n8n
-
-1. In n8n, click **Settings** (gear icon)
-2. Go to **Credentials**
-3. Add **Supabase** credentials:
-   - **Host**: Your Supabase URL
-   - **Service Role Key**: Get from Supabase Settings → API
+In the new architecture, n8n does not write to the database directly; it returns processed records to Spring.
 
 ### Step 7: Test End-to-End
 

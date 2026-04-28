@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { ChatMessage, ChatSession } from '@/types';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ChatMessage } from '@/types';
 
 interface ChatWidgetProps {
    sessionId?: string;
@@ -18,22 +18,8 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
 
-   // Initialize session on mount
-   useEffect(() => {
-      if (!sessionId) {
-         createNewSession();
-      } else {
-         loadChatHistory();
-      }
-   }, []);
-
-   // Auto-scroll to latest message
-   useEffect(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-   }, [messages]);
-
-   // Create new chat session
-   const createNewSession = async () => {
+   // Issue #16: Wrap in useCallback so they can be stable deps
+   const createNewSession = useCallback(async () => {
       try {
          const res = await fetch(`${backendBaseUrl}/api/chat/sessions`, {
             method: 'POST',
@@ -47,20 +33,18 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
          onSessionChange?.(data.id);
       } catch (err) {
          setError('Failed to create new chat session');
-         console.error(err);
       }
-   };
+   }, [backendBaseUrl, onSessionChange]);
 
-   // Load chat history
-   const loadChatHistory = async () => {
-      if (!sessionId) return;
+   const loadChatHistory = useCallback(async (sid: string) => {
+      if (!sid) return;
 
       try {
-         const res = await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}/messages`);
+         const res = await fetch(`${backendBaseUrl}/api/chat/sessions/${sid}/messages`);
          if (!res.ok) throw new Error('Failed to load chat history');
          const data = await res.json();
 
-         const normalized: ChatMessage[] = (data || []).map((m: any) => ({
+         const normalized: ChatMessage[] = (data || []).map((m: { id: string; role: 'user' | 'assistant'; content: string; timestamp: string }) => ({
             id: m.id,
             role: m.role,
             content: m.content,
@@ -68,10 +52,24 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
          }));
 
          setMessages(normalized);
-      } catch (err) {
-         console.error('Failed to load chat history:', err);
+      } catch {
+         // Failed to load history — not fatal
       }
-   };
+   }, [backendBaseUrl]);
+
+   // Issue #16: Fixed — proper dependency array
+   useEffect(() => {
+      if (!sessionId) {
+         createNewSession();
+      } else {
+         loadChatHistory(sessionId);
+      }
+   }, [sessionId, createNewSession, loadChatHistory]);
+
+   // Auto-scroll to latest message
+   useEffect(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+   }, [messages]);
 
    // Send message to n8n webhook
    const sendMessage = async (e: React.FormEvent) => {
@@ -117,7 +115,6 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
 
       } catch (err) {
          setError(err instanceof Error ? err.message : 'Failed to send message');
-         console.error(err);
       } finally {
          setIsLoading(false);
       }
@@ -131,9 +128,8 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
          }
          setMessages([]);
          await createNewSession();
-      } catch (err) {
+      } catch {
          setError('Failed to clear chat');
-         console.error(err);
       }
    };
 
@@ -278,32 +274,21 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
                </div>
             )}
 
-            {/* Chat Toggle Button */}
+            {/* Issue #15: Fixed — toggle button only renders when !isOpen, so removed dead isOpen ternary */}
             {!isOpen && (
                <button
-                  onClick={() => setIsOpen(!isOpen)}
+                  onClick={() => setIsOpen(true)}
                   className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-110"
-                  title={isOpen ? 'Close chat' : 'Open chat'}
+                  title="Open chat"
                >
-                  {isOpen ? (
-                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                           strokeLinecap="round"
-                           strokeLinejoin="round"
-                           strokeWidth={2}
-                           d="M6 18L18 6M6 6l12 12"
-                        />
-                     </svg>
-                  ) : (
-                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                           strokeLinecap="round"
-                           strokeLinejoin="round"
-                           strokeWidth={2}
-                           d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                     </svg>
-                  )}
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                     />
+                  </svg>
                </button>
             )}
          </div>

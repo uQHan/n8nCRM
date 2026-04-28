@@ -20,13 +20,16 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
 ## Architecture
 
 ```
-┌─────────────┐      ┌─────────┐      ┌──────────┐
-│   Next.js   │─────▶│   n8n   │─────▶│ Supabase │
-│  (Frontend) │      │(Workflow)      │   (DB)   │
-└─────────────┘      └─────────┘      └──────────┘
-       │                                     │
-       └─────────────────────────────────────┘
-              Realtime Updates
+┌─────────────┐      ┌──────────────┐      ┌──────────┐
+│   Next.js   │─────▶│  Spring Boot  │─────▶│ Supabase │
+│  (Frontend) │      │ (REST API)    │      │ (DB)     │
+└─────────────┘      └──────┬───────┘      └──────────┘
+            │
+            ▼
+              ┌─────┐
+              │ n8n │
+              │(Biz)│
+              └─────┘
 ```
 
 ## Setup Instructions
@@ -48,12 +51,9 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
    cp .env.local.example .env.local
    ```
 
-2. Fill in your Supabase credentials:
+2. Point the frontend at the Spring backend:
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-anon-key
-   NEXT_PUBLIC_N8N_WEBHOOK_URL=http://localhost:5678/webhook/process-crm
-   NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL=http://localhost:5678/webhook/chat
+   NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
    ```
 
 ### 3. Install Dependencies
@@ -83,16 +83,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
    n8n start
    ```
 
-3. Create a new workflow in n8n with:
+3. Create workflows in n8n with:
    - **Webhook trigger** at `/webhook/process-crm`
    - **Data cleaning nodes** (see `n8n-workflow-guide.md` for details)
-   - **Supabase nodes** to update job progress and store results
+   - Return processed records to Spring (Spring saves to DB)
 
 4. (Optional) Create a second workflow for the **CRM Chat Assistant**:
    - **Webhook trigger** at `/webhook/chat` (or set `NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL` to your n8n webhook URL)
    - Read chat input + session context
-   - **Fetch customer contacts** from Supabase (typically `processed_contacts`)
-   - **Update contact data** in Supabase when the user asks for changes
    - Return JSON in the shape: `{ "output": "...assistant reply..." }`
 
 ## Project Structure
@@ -129,11 +127,7 @@ nextjs-app/
 
 ## Chat Assistant (Contacts)
 
-The app includes a persistent chat widget (bottom-right) that:
-
-- Creates a chat session in Supabase (`chat_sessions`)
-- Stores each message in Supabase (`chat_messages`)
-- Sends your message to n8n via `NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL`
+The app includes a persistent chat widget (bottom-right) that calls Spring endpoints; Spring stores messages in the database and calls n8n to generate assistant responses.
 
 Typical chat requests you can support in n8n:
 

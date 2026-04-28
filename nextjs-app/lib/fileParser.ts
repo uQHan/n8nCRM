@@ -1,23 +1,18 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-
-export interface ParsedData {
-  headers: string[];
-  rows: Record<string, any>[];
-  totalRows: number;
-}
+import type { ParsedFileData } from '@/types';
 
 /**
  * Parse CSV file to structured data
  */
-export const parseCSV = (file: File): Promise<ParsedData> => {
+export const parseCSV = (file: File): Promise<ParsedFileData> => {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         const headers = results.meta.fields || [];
-        const rows = results.data as Record<string, any>[];
+        const rows = results.data as Record<string, string>[];
         
         resolve({
           headers,
@@ -35,7 +30,7 @@ export const parseCSV = (file: File): Promise<ParsedData> => {
 /**
  * Convert Excel file to CSV then parse
  */
-export const parseExcel = async (file: File): Promise<ParsedData> => {
+export const parseExcel = async (file: File): Promise<ParsedFileData> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -57,11 +52,11 @@ export const parseExcel = async (file: File): Promise<ParsedData> => {
         }
         
         // Extract headers from first row
-        const headers = Object.keys(jsonData[0] as Record<string, any>);
+        const headers = Object.keys(jsonData[0] as Record<string, string>);
         
         resolve({
           headers,
-          rows: jsonData as Record<string, any>[],
+          rows: jsonData as Record<string, string>[],
           totalRows: jsonData.length,
         });
       } catch (error) {
@@ -80,7 +75,7 @@ export const parseExcel = async (file: File): Promise<ParsedData> => {
 /**
  * Auto-detect file type and parse accordingly
  */
-export const parseFile = async (file: File): Promise<ParsedData> => {
+export const parseFile = async (file: File): Promise<ParsedFileData> => {
   const extension = file.name.split('.').pop()?.toLowerCase();
   
   if (extension === 'csv') {
@@ -134,7 +129,7 @@ export const autoDetectMappings = (headers: string[]): Record<string, string> =>
 /**
  * Convert parsed data to CSV string for download
  */
-export const convertToCSV = (data: Record<string, any>[]): string => {
+export const convertToCSV = (data: Record<string, string | boolean | number | undefined>[]): string => {
   if (data.length === 0) return '';
   
   const csv = Papa.unparse(data);
@@ -143,8 +138,9 @@ export const convertToCSV = (data: Record<string, any>[]): string => {
 
 /**
  * Trigger download of CSV file
+ * Issue #14 fix: revoke the Object URL after click to prevent memory leak
  */
-export const downloadCSV = (data: Record<string, any>[], filename: string) => {
+export const downloadCSV = (data: Record<string, string | boolean | number | undefined>[], filename: string) => {
   const csv = convertToCSV(data);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
@@ -156,4 +152,5 @@ export const downloadCSV = (data: Record<string, any>[], filename: string) => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };

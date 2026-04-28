@@ -22,7 +22,7 @@ export interface ProcessingJob {
   updated_at: string;
 }
 
-export type ProcessingStage = 
+export type ProcessingStage =
   | 'uploaded'
   | 'validating'
   | 'cleaning'
@@ -46,3 +46,47 @@ export interface ChatSession {
   created_at: string;
   updated_at: string;
 }
+
+// Issue #9: Proper types for parsed file data to replace `any`
+
+export interface ParsedFileData {
+  headers: string[];
+  rows: Record<string, string>[];
+  totalRows: number;
+}
+
+export interface ProcessedContactRow {
+  id?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  title?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  zip?: string;
+  website?: string;
+  email_verified?: boolean;
+  email_deliverable?: boolean;
+  company_domain?: string;
+  company_size?: string;
+  company_industry?: string;
+  company_location?: string;
+  phone_formatted?: string;
+  phone_valid?: boolean;
+  enriched?: boolean;
+  is_duplicate?: boolean;
+  data_quality_score?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: string | boolean | number | undefined;
+}
+
+/** CRM field names used for column mapping */
+export const CRM_FIELDS = [
+  'name', 'email', 'phone', 'company', 'title',
+  'address', 'city', 'state', 'country', 'website',
+] as const;
+export type CrmField = typeof CRM_FIELDS[number];

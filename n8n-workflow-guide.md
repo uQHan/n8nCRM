@@ -4,7 +4,7 @@ This guide explains how to create the n8n workflows for CRM data cleaning and en
 
 ## Overview
 
-The n8n workflow receives data from the Next.js frontend, processes it through multiple stages, and updates Supabase with progress and results.
+In the updated architecture, the n8n workflow receives data from the Spring backend, performs cleaning/enrichment/business logic, and returns the processed records back to Spring. Spring is the only component that writes to the database.
 
 
 ## File Upload, cleaning, enrichment Workflow
@@ -12,35 +12,23 @@ The n8n workflow receives data from the Next.js frontend, processes it through m
 ## Workflow Architecture
 
 ```
-Webhook Trigger
-     ↓
+Spring calls n8n Webhook
+  ↓
 Parse & Validate Data
-     ↓
-Create Job Records → Update Supabase (job created)
-     ↓
+  ↓
 Data Cleaning (Code)
-     ↓
-Update Progress (25%)
-     ↓
-Deduplication (Code - conditional inside)
-     ↓
-Update Progress (50%)
-     ↓
-Email Verification (Code - conditional inside)
-     ↓
-Update Progress (65%)
-     ↓
-Company Enrichment (Code - conditional inside)
-     ↓
-Update Progress (80%)
-     ↓
-Phone Validation (Code - conditional inside)
-     ↓
-Update Progress (95%)
-     ↓
-Save Results → Supabase
-     ↓
-Update Job Status → Completed (100%)
+  ↓
+Deduplication (Code - optional)
+  ↓
+Email Verification (Code - optional)
+  ↓
+Company Enrichment (Code - optional)
+  ↓
+Phone Validation (Code - optional)
+  ↓
+Build processed_contacts payload
+  ↓
+Respond to Webhook (return JSON)
 ```
 
 ## Creating the Workflow
@@ -54,7 +42,7 @@ Update Job Status → Completed (100%)
    - **Path**: `/webhook/process-crm`
    - **Response Mode**: Immediately
 
-This receives data from Next.js in this format:
+This receives data from Spring in this format:
 ```json
 {
   "jobId": "uuid",
@@ -84,21 +72,9 @@ Add **Set** node to extract variables:
 }
 ```
 
-### Step 3: Update Job Status - Validating
+### Important: Do not use Supabase nodes
 
-Add **Supabase** node:
-- **Operation**: Update
-- **Table**: `processing_jobs`
-- **Update Key**: `id`
-- **Update Value**: `{{ $json.jobId }}`
-- **Fields**:
-  ```json
-  {
-    "status": "cleaning",
-    "current_stage": "validating",
-    "progress": 10
-  }
-  ```
+Spring owns all DB writes. Your n8n workflow should not update `processing_jobs` or insert into `processed_contacts` directly.
 
 ### Step 4: Data Cleaning
 
@@ -147,19 +123,7 @@ const cleanedData = data.map(row => {
 return cleanedData.map(item => ({ json: item }));
 ```
 
-### Step 5: Update Progress - Cleaning Complete
-
-Add **Supabase** node:
-```json
-{
-  "status": "cleaning",
-  "current_stage": "cleaning",
-  "progress": 25,
-  "processed_rows": "{{ $json.length }}"
-}
-```
-
-### Step 6: Deduplication (Conditional)
+### Step 5: Deduplication (Conditional)
 
 Add **Code** node with conditional logic inside:
 ```javascript
@@ -202,15 +166,7 @@ data.forEach(row => {
 return unique.map(item => ({ json: item }));
 ```
 
-Update Supabase progress:
-```json
-{
-  "current_stage": "deduplicating",
-  "progress": 50
-}
-```
-
-### Step 7: Email Verification (Conditional)
+### Step 6: Email Verification (Conditional)
 
 Add **Code** node with conditional logic inside:
 ```javascript
@@ -236,15 +192,8 @@ return verified.map(item => ({ json: item }));
 
 **Note**: For production with external APIs like **Hunter.io** or **Abstract API**, you can integrate HTTP request nodes after this code node to enrich with more detailed verification results.
 
-Update progress:
-```json
-{
-  "current_stage": "enriching_emails",
-  "progress": 65
-}
-```
 
-### Step 8: Company Enrichment (Conditional)
+### Step 7: Company Enrichment (Conditional)
 
 Add **Code** node with conditional logic inside:
 ```javascript
@@ -277,15 +226,8 @@ return enriched.map(item => ({ json: item }));
 
 **Note**: For production, integrate HTTP request nodes (e.g., Clearbit API) after this code node to fetch actual company data using the extracted domain.
 
-Update progress:
-```json
-{
-  "current_stage": "enriching_companies",
-  "progress": 80
-}
-```
 
-### Step 9: Phone Validation (Conditional)
+### Step 8: Phone Validation (Conditional)
 
 Add **Code** node with conditional logic inside:
 ```javascript
@@ -325,90 +267,92 @@ const validated = data.map(row => {
 return validated.map(item => ({ json: item }));
 ```
 
-Update progress:
+### Step 9: Prepare Response Payload
+
+Add **Code** node to construct the final payload that Spring will persist.
+
+Your **output must be** a single JSON response of the form:
 ```json
 {
-  "current_stage": "validating_phones",
-  "progress": 95
+  "processedContacts": [
+    {
+      "original_data": { "...": "..." },
+      "name": "...",
+      "email": "...",
+      "phone": "...",
+      "company": "...",
+      "title": "...",
+      "address": "...",
+      "city": "...",
+      "state": "...",
+      "country": "...",
+      "zip": "...",
+      "website": "...",
+      "email_verified": true,
+      "email_deliverable": true,
+      "company_domain": "example.com",
+      "phone_formatted": "+1 (...) ...",
+      "phone_valid": true,
+      "enriched": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "data_quality_score": 85
+    }
+  ]
 }
 ```
 
-### Step 10: Prepare Data for Insert
-
-Add **Code** node to construct final records with all required fields:
+Example Code node:
 ```javascript
 const data = $input.all().map(item => item.json);
-const jobId = $('Extract').first().json.jobId;
+const processedContacts = data.map(row => ({
+  original_data: row.original_data ?? row,
 
-// Build final records with only schema-matching fields
-const finalRecords = data.map(row => {
-  return {
-    // Cleaned fields
-    name: row.name || null,
-    email: row.email || null,
-    phone: row.phone || null,
-    company: row.company || null,
-    title: row.title || null,
-    address: row.address || null,
-    city: row.city || null,
-    state: row.state || null,
-    country: row.country || null,
-    zip: row.zip || null,
-    website: row.website || null,
-    
-    // Enriched fields
-    email_verified: row.email_verified || false,
-    email_deliverable: row.email_deliverable || false,
-    company_domain: row.company_domain || null,
-    phone_formatted: row.phone_formatted || null,
-    phone_valid: row.phone_valid || false,
-    
-    // Metadata
-    job_id: jobId,
-    enriched: true,
-    is_duplicate: row.is_duplicate || false,
-    duplicate_of: row.duplicate_of || null,
-    data_quality_score: 85
-  };
-});
+  name: row.name ?? null,
+  email: row.email ?? null,
+  phone: row.phone ?? null,
+  company: row.company ?? null,
+  title: row.title ?? null,
+  address: row.address ?? null,
+  city: row.city ?? null,
+  state: row.state ?? null,
+  country: row.country ?? null,
+  zip: row.zip ?? null,
+  website: row.website ?? null,
 
-return finalRecords.map(item => ({ json: item }));
+  email_verified: row.email_verified ?? false,
+  email_deliverable: row.email_deliverable ?? false,
+  company_domain: row.company_domain ?? null,
+  phone_formatted: row.phone_formatted ?? null,
+  phone_valid: row.phone_valid ?? false,
+
+  enriched: row.enriched ?? true,
+  is_duplicate: row.is_duplicate ?? false,
+  duplicate_of: row.duplicate_of ?? null,
+  data_quality_score: row.data_quality_score ?? 85,
+}));
+
+return [{ json: { processedContacts } }];
 ```
 
-### Step 11: Save to Supabase
+### Step 10: Respond to Webhook
 
-Add **Supabase** node:
-- **Operation**: Insert
-- **Table**: `processed_contacts`
-- **Mapping**: Auto map (automatically maps all returned fields from the Code node)
+Add **Respond to Webhook** node as the last node.
 
-### Step 12: Mark Job Complete
-
-Add **Supabase** node:
-- **Operation**: Update
-- **Table**: `processing_jobs`
-- **Update Key**: `id`
-- **Update Value**: `{{ $node['Extract'].json.jobId }}`
-- **Fields**:
-  ```json
-  {
-    "status": "completed",
-    "current_stage": "completed",
-    "progress": 100
-  }
-  ```
+- **Response Body**: `{{ $json }}`
+- Ensure the initial **Webhook** node is configured to respond at the end (e.g. "When Last Node Finishes") so Spring receives the final `processedContacts` list.
 
 ## Error Handling
 
 Add **Error Trigger** node and connect to all main nodes:
 
+Recommended approach:
 1. Catch errors
-2. Update Supabase:
+2. Respond with an error payload so Spring can mark the job as failed:
 ```json
 {
-  "status": "failed",
-  "current_stage": "failed",
-  "error_count": "={{ $json.error_count + 1 }}"
+  "error": "{{ $json.message || 'Workflow failed' }}",
+  "processedContacts": []
 }
 ```
 
@@ -416,9 +360,9 @@ Add **Error Trigger** node and connect to all main nodes:
 
 1. Save and activate the workflow
 2. Note the webhook URL (e.g., `http://localhost:5678/webhook/process-crm`)
-3. Update your Next.js `.env.local` with this URL
-4. Upload a test CSV file in the frontend
-5. Monitor the workflow execution in n8n
+3. Configure the Spring backend env var `N8N_CRM_WEBHOOK_URL` to point at that webhook URL
+4. Upload a test CSV file in the frontend (Next.js talks to Spring, not n8n)
+5. Monitor the workflow execution in n8n and the job status via Spring
 
 ## Tips
 
