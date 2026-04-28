@@ -1,21 +1,24 @@
-FROM node:20-alpine
-
+# ---- Build stage ----
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy app files
 COPY . .
-
-# Build Next.js app
 RUN npm run build
 
-# Expose port
+# ---- Production stage ----
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy only the production artifacts
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
 EXPOSE 3000
 
-# Start app
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
