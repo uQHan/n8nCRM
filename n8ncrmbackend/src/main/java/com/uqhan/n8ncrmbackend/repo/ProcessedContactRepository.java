@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,24 @@ import com.uqhan.n8ncrmbackend.entity.ProcessedContact;
 public interface ProcessedContactRepository extends JpaRepository<ProcessedContact, UUID> {
 	List<ProcessedContact> findByJob_IdOrderByCreatedAtAsc(UUID jobId);
 	boolean existsByEmail(String email);
+
+	@Query("""
+			SELECT pc
+			FROM ProcessedContact pc
+			WHERE (
+				:q IS NULL OR :q = '' OR
+				LOWER(COALESCE(pc.name, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+				LOWER(COALESCE(pc.email, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR
+				LOWER(COALESCE(pc.company, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+			)
+			AND (:deliverableOnly = FALSE OR pc.emailDeliverable = TRUE)
+			ORDER BY pc.createdAt DESC
+			""")
+	Page<ProcessedContact> searchContacts(
+			@Param("q") String q,
+			@Param("deliverableOnly") boolean deliverableOnly,
+			Pageable pageable
+	);
 
 	/**
 	 * Issue #4: Batch query to pre-fetch existing emails, replacing the N+1
