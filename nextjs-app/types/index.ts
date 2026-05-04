@@ -84,6 +84,65 @@ export interface ProcessedContactRow {
   [key: string]: string | boolean | number | undefined;
 }
 
+export interface ContactSummary {
+  id: string;
+  name?: string;
+  email: string;
+  company?: string;
+  email_deliverable?: boolean;
+}
+
+export interface ContactSearchResponse {
+  items: ContactSummary[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface EmailPlaceholder {
+  token: string;
+  description: string;
+}
+
+export interface EmailPlaceholdersResponse {
+  placeholders: EmailPlaceholder[];
+}
+
+export interface EmailPreviewRequest {
+  contact_id: string;
+  subject_template: string;
+  body_template: string;
+}
+
+export interface EmailPreviewResponse {
+  contact_id: string;
+  to_email: string;
+  subject: string;
+  body: string;
+}
+
+export interface EmailSendRequest {
+  contact_ids: string[];
+  subject_template: string;
+  body_template: string;
+  delivery_mode?: 'SMTP' | 'N8N' | string;
+  is_html: boolean;
+  dry_run: boolean;
+}
+
+export interface EmailSendItemResult {
+  contact_id: string;
+  to_email?: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface EmailSendResponse {
+  results: EmailSendItemResult[];
+  success_count: number;
+  failure_count: number;
+}
+
 /** CRM field names used for column mapping */
 export const CRM_FIELDS = [
   'name', 'email', 'phone', 'company', 'title',

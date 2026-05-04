@@ -18,7 +18,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    const messagesEndRef = useRef<HTMLDivElement>(null);
    const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
 
-   // Issue #16: Wrap in useCallback so they can be stable deps
+   // Wrap in useCallback so they can be stable deps
    const createNewSession = useCallback(async () => {
       try {
          const res = await fetch(`${backendBaseUrl}/api/chat/sessions`, {
@@ -31,7 +31,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
          setSessionId(data.id);
          setMessages([]);
          onSessionChange?.(data.id);
-      } catch (err) {
+      } catch {
          setError('Failed to create new chat session');
       }
    }, [backendBaseUrl, onSessionChange]);
@@ -187,8 +187,8 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
                               >
                                  <div
                                     className={`max-w-xs px-4 py-2 rounded-lg ${message.role === 'user'
-                                          ? 'bg-indigo-600 text-white rounded-br-none'
-                                          : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-none'
+                                       ? 'bg-indigo-600 text-white rounded-br-none'
+                                       : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-bl-none'
                                        }`}
                                  >
                                     <p className="text-sm whitespace-pre-wrap wrap-break-word">
@@ -196,8 +196,8 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
                                     </p>
                                     <span
                                        className={`text-xs mt-1 block ${message.role === 'user'
-                                             ? 'text-indigo-100'
-                                             : 'text-gray-400 dark:text-gray-500'
+                                          ? 'text-indigo-100'
+                                          : 'text-gray-400 dark:text-gray-500'
                                           }`}
                                     >
                                        {new Date(message.timestamp).toLocaleTimeString([], {
