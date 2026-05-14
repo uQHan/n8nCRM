@@ -16,6 +16,8 @@ public interface ProcessedContactRepository extends JpaRepository<ProcessedConta
 	List<ProcessedContact> findByJob_IdOrderByCreatedAtAsc(UUID jobId);
 	boolean existsByEmail(String email);
 
+	List<ProcessedContact> findByEmailIn(Collection<String> emails);
+
 	@Query("""
 			SELECT pc
 			FROM ProcessedContact pc
@@ -34,10 +36,11 @@ public interface ProcessedContactRepository extends JpaRepository<ProcessedConta
 			Pageable pageable
 	);
 
-	/**
-	 * Issue #4: Batch query to pre-fetch existing emails, replacing the N+1
-	 * existsByEmail() calls inside the processing loop.
-	 */
-	@Query("SELECT pc.email FROM ProcessedContact pc WHERE pc.email IN :emails")
-	List<String> findExistingEmails(@Param("emails") Collection<String> emails);
+	// NOTE: legacy job-scoped method kept only for backward compatibility;
+	// master-list processing uses global email uniqueness + upserts.
+	@Query("SELECT pc.email FROM ProcessedContact pc WHERE pc.job.id = :jobId AND pc.email IN :emails")
+	List<String> findExistingEmailsForJob(
+			@Param("jobId") UUID jobId,
+			@Param("emails") Collection<String> emails
+	);
 }

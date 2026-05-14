@@ -7,16 +7,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uqhan.n8ncrmbackend.entity.JobProcessedContact;
 import com.uqhan.n8ncrmbackend.entity.ProcessedContact;
 import com.uqhan.n8ncrmbackend.entity.ProcessingJob;
+import com.uqhan.n8ncrmbackend.repo.JobProcessedContactRepository;
 import com.uqhan.n8ncrmbackend.repo.ProcessedContactRepository;
 import com.uqhan.n8ncrmbackend.repo.ProcessingJobRepository;
 
@@ -27,21 +29,23 @@ import com.uqhan.n8ncrmbackend.repo.ProcessingJobRepository;
  */
 @Service
 public class CrmJobProcessor {
+	private static final Logger log = LoggerFactory.getLogger(CrmJobProcessor.class);
+
 	private final ProcessingJobRepository jobRepository;
 	private final ProcessedContactRepository contactRepository;
+	private final JobProcessedContactRepository jobProcessedContactRepository;
 	private final N8nClient n8nClient;
-	private final ObjectMapper objectMapper;
 
 	public CrmJobProcessor(
 			ProcessingJobRepository jobRepository,
 			ProcessedContactRepository contactRepository,
-			N8nClient n8nClient,
-			ObjectMapper objectMapper
+			JobProcessedContactRepository jobProcessedContactRepository,
+			N8nClient n8nClient
 	) {
 		this.jobRepository = jobRepository;
 		this.contactRepository = contactRepository;
+		this.jobProcessedContactRepository = jobProcessedContactRepository;
 		this.n8nClient = n8nClient;
-		this.objectMapper = objectMapper;
 	}
 
 	@Async
@@ -75,41 +79,82 @@ public class CrmJobProcessor {
 			JsonNode response = n8nClient.callCrmWorkflow(payload);
 			List<JsonNode> contactsJson = extractContacts(response);
 
+			if (totalRows > 0 && contactsJson.isEmpty()) {
+				String responseSnippet;
+				try {
+					responseSnippet = response == null ? "<null>" : response.toString();
+					if (responseSnippet.length() > 800) {
+						responseSnippet = responseSnippet.substring(0, 800) + "…";
+					}
+				} catch (Exception ignored) {
+					responseSnippet = "<unavailable>";
+				}
+				log.warn(
+						"CRM job {}: n8n returned 0 contacts for totalRows={} responseType={} responseSnippet={}",
+						jobId,
+						totalRows,
+						response == null ? "null" : response.getNodeType(),
+						responseSnippet
+				);
+				job.setProcessedRows(0);
+				job.setErrorCount(totalRows);
+				job.setStatus(ProcessingJob.Status.failed);
+				job.setCurrentStage("no-contacts-returned");
+				job.setProgress(100);
+				jobRepository.save(job);
+				return;
+			}
+
 			job.setStatus(ProcessingJob.Status.enriching);
 			job.setCurrentStage("saving");
 			job.setProgress(85);
 			jobRepository.save(job);
 
-			// Issue #4 fix: Batch pre-fetch existing emails to avoid N+1 queries
-			Set<String> incomingEmails = new HashSet<>();
-			for (JsonNode node : contactsJson) {
-				String email = textOrNull(node.get("email"));
-				if (email != null && !email.isBlank()) {
-					incomingEmails.add(email);
-				}
-			}
-			Set<String> existingEmails = incomingEmails.isEmpty()
-					? Set.of()
-					: new HashSet<>(contactRepository.findExistingEmails(incomingEmails));
-
+			// Master-list semantics: global unique email; re-uploads update existing contacts.
+			// Still keep per-job result reporting via job_processed_contacts.
 			int processed = 0;
+			int created = 0;
+			int updated = 0;
 			int errors = 0;
+			int skippedBlankEmail = 0;
+			int skippedDuplicateInBatch = 0;
 			Set<String> seenInBatch = new HashSet<>();
-			List<ProcessedContact> toSave = new ArrayList<>();
+			Map<String, JsonNode> byEmail = new HashMap<>();
 			for (JsonNode node : contactsJson) {
-				String email = textOrNull(node.get("email"));
+				String rawEmail = textOrNull(node.get("email"));
+				String email = normalizeEmail(rawEmail);
 				if (email == null || email.isBlank()) {
 					errors++;
+					skippedBlankEmail++;
 					continue;
 				}
-				// Skip if already in DB or duplicate within current batch
-				if (existingEmails.contains(email) || !seenInBatch.add(email)) {
+				if (!seenInBatch.add(email)) {
 					errors++;
+					skippedDuplicateInBatch++;
 					continue;
 				}
+				byEmail.put(email, node);
+			}
 
-				ProcessedContact c = new ProcessedContact();
-				c.setJob(job);
+			Map<String, ProcessedContact> existingByEmail = new HashMap<>();
+			if (!byEmail.isEmpty()) {
+				for (ProcessedContact c : contactRepository.findByEmailIn(byEmail.keySet())) {
+					existingByEmail.put(normalizeEmail(c.getEmail()), c);
+				}
+			}
+
+			List<ProcessedContact> toSave = new ArrayList<>();
+			for (Map.Entry<String, JsonNode> entry : byEmail.entrySet()) {
+				String email = entry.getKey();
+				JsonNode node = entry.getValue();
+				ProcessedContact c = existingByEmail.get(email);
+				if (c == null) {
+					c = new ProcessedContact();
+					c.setJob(job);
+					created++;
+				} else {
+					updated++;
+				}
 				c.setEmail(email);
 				c.setName(textOrNull(node.get("name")));
 				c.setPhone(textOrNull(node.get("phone")));
@@ -133,12 +178,33 @@ public class CrmJobProcessor {
 				c.setDuplicate(boolOrNull(node.get("is_duplicate")));
 				c.setDuplicateOf(uuidOrNull(node.get("duplicate_of")));
 				c.setDataQualityScore(intOrNull(node.get("data_quality_score")));
-				c.setOriginalData(node.has("original_data") ? node.get("original_data").toString() : null);
+				c.setOriginalData(node.has("original_data") ? node.get("original_data").toString() : node.toString());
 				toSave.add(c);
 				processed++;
 			}
 
-			contactRepository.saveAll(toSave);
+			List<ProcessedContact> savedContacts = new ArrayList<>();
+			contactRepository.saveAll(toSave).forEach(savedContacts::add);
+
+			List<JobProcessedContact> linksToSave = new ArrayList<>();
+			for (ProcessedContact c : savedContacts) {
+				JobProcessedContact link = new JobProcessedContact();
+				link.setJob(job);
+				link.setContact(c);
+				linksToSave.add(link);
+			}
+			jobProcessedContactRepository.saveAll(linksToSave);
+
+			log.info(
+					"CRM job {}: received={} processed={} created={} updated={} skippedBlankEmail={} skippedDuplicateInBatch={}",
+					jobId,
+					contactsJson.size(),
+					processed,
+					created,
+					updated,
+					skippedBlankEmail,
+					skippedDuplicateInBatch
+			);
 
 			job.setProcessedRows(processed);
 			job.setErrorCount(errors);
@@ -158,21 +224,24 @@ public class CrmJobProcessor {
 		if (response == null || response.isNull()) {
 			return List.of();
 		}
-		JsonNode node;
-		if (response.isArray()) {
-			node = response;
-		} else if (response.has("processedContacts")) {
-			node = response.get("processedContacts");
-		} else if (response.has("data")) {
-			node = response.get("data");
-		} else {
-			node = objectMapper.createArrayNode();
+
+		// Contract: n8n responds as a single object containing an array under "processedContacts".
+		JsonNode processedContacts = null;
+		if (response.isObject()) {
+			processedContacts = response.get("processedContacts");
+		} else if (response.isArray()
+				&& response.size() == 1
+				&& response.get(0) != null
+				&& response.get(0).isObject()) {
+			processedContacts = response.get(0).get("processedContacts");
 		}
-		if (!node.isArray()) {
+
+		if (processedContacts == null || !processedContacts.isArray()) {
 			return List.of();
 		}
+
 		List<JsonNode> out = new ArrayList<>();
-		node.forEach(out::add);
+		processedContacts.forEach(out::add);
 		return out;
 	}
 
@@ -196,5 +265,16 @@ public class CrmJobProcessor {
 		} catch (Exception e) {
 			return null;
 		}
+	}
+
+	private static String normalizeEmail(String email) {
+		if (email == null) {
+			return null;
+		}
+		String trimmed = email.trim();
+		if (trimmed.isBlank()) {
+			return null;
+		}
+		return trimmed.toLowerCase();
 	}
 }

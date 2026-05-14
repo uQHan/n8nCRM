@@ -1,0 +1,132 @@
+{
+  "name": "Send Email (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-email",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -520,
+        0
+      ],
+      "id": "webhook-send-email",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body || $json;\nconst c = payload.contact || {};\n\nfunction render(t) {\n  if (!t) return t;\n  return String(t)\n    .replaceAll('[cname]', c.name || '')\n    .replaceAll('[ccompany]', c.company || '')\n    .replaceAll('[ccompnay]', c.company || '')\n    .replaceAll('[cemail]', c.email || '');\n}\n\nreturn [{\n  json: {\n    ...payload,\n    subject: render(payload.subject_template),\n    body: render(payload.body_template),\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "render",
+      "name": "Render Placeholders"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.dry_run }}",
+              "operation": "isTrue"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "if-dry-run",
+      "name": "Dry Run?"
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "={{ { ok: true, dry_run: true, to: $json.contact?.email || null, subject: $json.subject || null, body: $json.body || null } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -120
+      ],
+      "id": "respond-dry-run",
+      "name": "Respond (Dry Run)"
+    },
+    {
+      "parameters": {
+        "responseCode": 501,
+        "responseBody": "={{ { ok: false, error: 'Email sending is not configured in this workflow yet. Add an Email/SMTP node after Render Placeholders and before this response node.', to: $json.contact?.email || null } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        160,
+        120
+      ],
+      "id": "respond-not-implemented",
+      "name": "Respond (Not Configured)"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Render Placeholders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Placeholders": {
+      "main": [
+        [
+          {
+            "node": "Dry Run?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dry Run?": {
+      "main": [
+        [
+          {
+            "node": "Respond (Dry Run)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond (Not Configured)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

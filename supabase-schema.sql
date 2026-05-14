@@ -90,6 +90,20 @@ CREATE INDEX IF NOT EXISTS idx_processed_contacts_company ON processed_contacts(
 CREATE INDEX IF NOT EXISTS idx_processed_contacts_enriched ON processed_contacts(enriched);
 
 -- =====================================================
+-- Table: job_processed_contacts
+-- Preserves per-job result sets while processed_contacts is a master list
+-- =====================================================
+CREATE TABLE IF NOT EXISTS job_processed_contacts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_id UUID NOT NULL REFERENCES processing_jobs(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES processed_contacts(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_processed_contacts_job_id ON job_processed_contacts(job_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_job_processed_contacts_job_contact ON job_processed_contacts(job_id, contact_id);
+
+-- =====================================================
 -- Table: enrichment_logs
 -- Tracks what enrichment operations were performed
 -- =====================================================
@@ -214,7 +228,8 @@ SELECT
   pj.created_at,
   pj.updated_at
 FROM processing_jobs pj
-LEFT JOIN processed_contacts pc ON pc.job_id = pj.id
+LEFT JOIN job_processed_contacts jpc ON jpc.job_id = pj.id
+LEFT JOIN processed_contacts pc ON pc.id = jpc.contact_id
 GROUP BY pj.id;
 
 -- =====================================================

@@ -36,7 +36,7 @@ public class ProcessedContact {
 	private String name;
 
 	@Size(max = 320)
-	@Column(nullable = false, unique = true)
+	@Column(nullable = false)
 	private String email;
 
 	@Size(max = 50)

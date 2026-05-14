@@ -1,0 +1,155 @@
+{
+  "name": "CRM Chat Assistant (Spring-powered)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "webhook-chat",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "previousMessages",
+              "value": "={{ ($json.body.context && $json.body.context.previousMessages) ? $json.body.context.previousMessages : [] }}",
+              "type": "array"
+            },
+            {
+              "id": "a4",
+              "name": "springBaseUrl",
+              "value": "={{ $env.SPRING_API_URL ? $env.SPRING_API_URL : 'http://spring-backend:8080' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "extract",
+      "name": "Extract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Extract').first().json;\nconst chatInput = String(input.chatInput || '').trim();\n\nfunction helpText() {\n  return [\n    'I can help you explore processed contacts and explain the CRM cleaning pipeline.',\n    '',\n    'Try:',\n    '- \"latest 10 contacts\"',\n    '- \"find john@acme.com\"',\n    '- \"search Acme\"',\n    '- \"deliverable contacts\"',\n    '',\n    'Notes:',\n    '- Contacts are stored by Spring; I query Spring’s /api/contacts endpoint.',\n  ].join('\\n');\n}\n\nconst lower = chatInput.toLowerCase();\n\n// Basic intent detection\nconst wantsHelp = !chatInput || /^(help|\\?|what can you do|commands|usage)\\b/i.test(chatInput);\nif (wantsHelp) {\n  return [{ json: { ...input, intent: 'help', output: helpText() } }];\n}\n\n// Determine query\nlet q = '';\nlet size = 10;\nlet deliverableOnly = false;\n\nconst emailMatch = chatInput.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i);\nif (emailMatch) {\n  q = emailMatch[0];\n} else {\n  const m = chatInput.match(/\\b(find|search|lookup)\\b\\s+(.+)$/i);\n  if (m && m[2]) q = m[2].trim();\n}\n\nif (/\\b(latest|recent|newest|last)\\b/.test(lower)) {\n  q = '';\n}\n\nif (/\\b(deliverable|verified|valid)\\b/.test(lower)) {\n  deliverableOnly = true;\n}\n\nconst sizeMatch = chatInput.match(/\\b(\\d{1,3})\\b/);\nif (sizeMatch) {\n  const n = Number(sizeMatch[1]);\n  if (Number.isFinite(n) && n >= 1 && n <= 50) size = n;\n}\n\nreturn [{ json: { ...input, intent: 'contacts', q, size, deliverableOnly } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "parse-intent",
+      "name": "Parse Intent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json;\n\nif (input.intent === 'help') {\n  return [{ json: { output: input.output } }];\n}\n\nconst springBaseUrl = String(input.springBaseUrl || '').replace(/\\/+$/, '');\nconst url = `${springBaseUrl}/api/contacts`;\n\nconst qs = {\n  q: input.q || undefined,\n  deliverableOnly: Boolean(input.deliverableOnly),\n  page: 0,\n  size: Math.min(50, Math.max(1, Number(input.size || 10))),\n};\n\nlet data;\ntry {\n  data = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    qs,\n    headers: { 'Accept': 'application/json' },\n    json: true,\n  });\n} catch (e) {\n  const msg = e && e.message ? e.message : String(e);\n  return [{ json: { output: `I couldn’t reach the Spring backend at ${url}.\\nError: ${msg}` } }];\n}\n\nconst items = Array.isArray(data?.items) ? data.items : [];\nif (items.length === 0) {\n  return [{ json: { output: 'No contacts found for that query yet.' } }];\n}\n\nconst lines = [];\nlines.push(`Found ${items.length} contact(s):`);\nfor (const c of items) {\n  const name = c.name || '(no name)';\n  const email = c.email || '(no email)';\n  const company = c.company ? ` — ${c.company}` : '';\n  lines.push(`- ${name} <${email}>${company}`);\n}\n\nreturn [{ json: { output: lines.join('\\n') } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "id": "build-reply",
+      "name": "Build Reply"
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        320,
+        0
+      ],
+      "id": "respond",
+      "name": "Respond"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Build Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}

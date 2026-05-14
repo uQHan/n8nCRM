@@ -1,14 +1,20 @@
 package com.uqhan.n8ncrmbackend.service;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +25,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 @Component
 public class N8nClient {
+	private static final Logger log = LoggerFactory.getLogger(N8nClient.class);
+	private static final int LOG_BODY_SNIPPET_LIMIT = 800;
+
 	private final RestClient restClient;
 	private final ObjectMapper objectMapper;
 	private final String crmWebhookUrl;
@@ -46,47 +55,86 @@ public class N8nClient {
 	}
 
 	public JsonNode callCrmWorkflow(Map<String, Object> payload) {
-		String raw = restClient.post()
-				.uri(crmWebhookUrl)
-				.contentType(MediaType.APPLICATION_JSON)
-				.body(payload)
-				.retrieve()
-				.body(String.class);
-		try {
-			return objectMapper.readTree(raw == null || raw.isBlank() ? "{}" : raw);
-		} catch (IOException e) {
-			throw new IllegalStateException("Failed to parse n8n CRM workflow response", e);
-		}
+		return callWebhook("crm", crmWebhookUrl, payload);
 	}
 
 	public JsonNode callChatWorkflow(Map<String, Object> payload) {
-		String raw = restClient.post()
-				.uri(chatWebhookUrl)
-				.contentType(MediaType.APPLICATION_JSON)
-				.body(payload)
-				.retrieve()
-				.body(String.class);
-		try {
-			return objectMapper.readTree(raw == null || raw.isBlank() ? "{}" : raw);
-		} catch (IOException e) {
-			throw new IllegalStateException("Failed to parse n8n chat workflow response", e);
-		}
+		return callWebhook("chat", chatWebhookUrl, payload);
 	}
 
 	public JsonNode callEmailWorkflow(Map<String, Object> payload) {
 		if (emailWebhookUrl == null || emailWebhookUrl.isBlank()) {
 			throw new IllegalStateException("n8n email webhook is not configured. Set N8N_EMAIL_WEBHOOK_URL (n8n.webhook.email.url).");
 		}
-		String raw = restClient.post()
-				.uri(emailWebhookUrl)
-				.contentType(MediaType.APPLICATION_JSON)
-				.body(payload)
-				.retrieve()
-				.body(String.class);
+		return callWebhook("email", emailWebhookUrl, payload);
+	}
+
+	private JsonNode callWebhook(String label, String url, Map<String, Object> payload) {
 		try {
-			return objectMapper.readTree(raw == null || raw.isBlank() ? "{}" : raw);
-		} catch (IOException e) {
-			throw new IllegalStateException("Failed to parse n8n email workflow response", e);
+			return restClient.post()
+					.uri(url)
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(payload)
+					.exchange((request, response) -> parseJsonResponse(label, url, response));
+		} catch (RestClientResponseException e) {
+			String body = e.getResponseBodyAsString();
+			log.warn(
+					"n8n {} webhook call failed: status={} url={} bodySnippet={}",
+					label,
+					e.getStatusCode().value(),
+					url,
+					snippet(body == null ? "" : body)
+			);
+			throw e;
 		}
+	}
+
+	private JsonNode parseJsonResponse(String label, String url, ClientHttpResponse response) throws IOException {
+		HttpStatusCode status = response.getStatusCode();
+		MediaType contentType = response.getHeaders().getContentType();
+		byte[] bytes = response.getBody().readAllBytes();
+		String raw = bytes.length == 0 ? "" : new String(bytes, StandardCharsets.UTF_8);
+
+		if (!status.is2xxSuccessful()) {
+			log.warn(
+					"n8n {} webhook returned non-2xx: status={} url={} contentType={} bodySnippet={}",
+					label,
+					status.value(),
+					url,
+					contentType,
+					snippet(raw)
+			);
+			throw new IllegalStateException("n8n " + label + " webhook returned HTTP " + status.value());
+		}
+
+		log.debug(
+				"n8n {} webhook response: status={} url={} contentType={} bytes={} bodySnippet={}",
+				label,
+				status.value(),
+				url,
+				contentType,
+				bytes.length,
+				snippet(raw)
+		);
+
+		try {
+			return objectMapper.readTree(raw.isBlank() ? "{}" : raw);
+		} catch (IOException e) {
+			log.warn(
+					"Failed to parse n8n {} webhook response as JSON: url={} contentType={} bytes={} bodySnippet={}",
+					label,
+					url,
+					contentType,
+					bytes.length,
+					snippet(raw)
+			);
+			throw e;
+		}
+	}
+
+	private static String snippet(String raw) {
+		String s = raw.replaceAll("\\s+", " ").trim();
+		if (s.length() <= LOG_BODY_SNIPPET_LIMIT) return s;
+		return s.substring(0, LOG_BODY_SNIPPET_LIMIT) + "…";
 	}
 }
