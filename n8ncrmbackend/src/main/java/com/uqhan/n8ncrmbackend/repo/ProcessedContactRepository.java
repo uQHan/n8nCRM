@@ -28,11 +28,15 @@ public interface ProcessedContactRepository extends JpaRepository<ProcessedConta
 				LOWER(COALESCE(pc.company, '')) LIKE LOWER(CONCAT('%', :q, '%'))
 			)
 			AND (:deliverableOnly = FALSE OR pc.emailDeliverable = TRUE)
+			AND (:enrichedOnly = FALSE OR pc.enriched = TRUE)
+			AND (:duplicatesOnly = FALSE OR pc.duplicate = TRUE)
 			ORDER BY pc.createdAt DESC
 			""")
 	Page<ProcessedContact> searchContacts(
 			@Param("q") String q,
 			@Param("deliverableOnly") boolean deliverableOnly,
+			@Param("enrichedOnly") boolean enrichedOnly,
+			@Param("duplicatesOnly") boolean duplicatesOnly,
 			Pageable pageable
 	);
 

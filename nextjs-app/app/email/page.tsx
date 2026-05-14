@@ -208,7 +208,13 @@ export default function EmailPage() {
             <Link href="/" className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               CRM Data Cleaner
             </Link>
-            <nav className="text-sm">
+            <nav className="flex space-x-4 text-sm">
+              <Link
+                href="/contacts"
+                className="text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white font-semibold"
+              >
+                Contacts
+              </Link>
               <Link
                 href="/email"
                 className="font-semibold text-gray-900 dark:text-gray-100"

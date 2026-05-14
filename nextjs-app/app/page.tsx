@@ -41,7 +41,13 @@ export default function Home() {
                 CRM Data Cleaner
               </h1>
             </Link>
-            <nav className="text-sm">
+            <nav className="flex space-x-4 text-sm">
+              <Link
+                href="/contacts"
+                className="text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white font-semibold"
+              >
+                Contacts
+              </Link>
               <Link
                 href="/email"
                 className="text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white font-semibold"

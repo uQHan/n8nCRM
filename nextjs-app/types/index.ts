@@ -57,6 +57,7 @@ export interface ParsedFileData {
 
 export interface ProcessedContactRow {
   id?: string;
+  original_data?: string;
   name?: string;
   email?: string;
   phone?: string;
@@ -78,6 +79,7 @@ export interface ProcessedContactRow {
   phone_valid?: boolean;
   enriched?: boolean;
   is_duplicate?: boolean;
+  duplicate_of?: string;
   data_quality_score?: number;
   created_at?: string;
   updated_at?: string;
@@ -97,6 +99,25 @@ export interface ContactSearchResponse {
   total: number;
   page: number;
   size: number;
+}
+
+export interface ContactUpdateRequest {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  title?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip?: string | null;
+  website?: string | null;
+  company_domain?: string | null;
+  company_size?: string | null;
+  company_industry?: string | null;
+  company_location?: string | null;
+  phone_formatted?: string | null;
 }
 
 export interface EmailPlaceholder {
