@@ -1,0 +1,257 @@
+{
+  "name": "CRM Send Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-email",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -496,
+        -96
+      ],
+      "id": "18cccef7-3eeb-4f87-9474-b3b61b0387d6",
+      "name": "Webhook",
+      "webhookId": "37565b5f-4843-45b2-9852-095d35f36e1c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body || $json;\nconst c = payload.contact || {};\n\nfunction render(t) {\n  if (!t) return t;\n  return String(t)\n    .replaceAll('[cname]', c.name || '')\n    .replaceAll('[ccompany]', c.company || '')\n    .replaceAll('[ccompnay]', c.company || '')\n    .replaceAll('[cemail]', c.email || '');\n}\n\nreturn [{\n  json: {\n    ...payload,\n    subject: render(payload.subject_template),\n    body: render(payload.body_template),\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -96
+      ],
+      "id": "963a9725-6b40-4f08-bbf7-d185598c5bd0",
+      "name": "Render Placeholders"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "41cb37f3-d2e6-4422-81cf-d07fd3bedeca",
+              "leftValue": "={{ $json.dry_run }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -96
+      ],
+      "id": "bcfea105-8328-486d-ba2c-c5439dc2b833",
+      "name": "Dry Run?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "77cf7b24-1ada-4f0e-b116-e77978b02f95",
+              "leftValue": "={{ $json.is_html }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        176,
+        -96
+      ],
+      "id": "5c9029aa-8ad6-436a-8fe3-0c2bb296383c",
+      "name": "isHTML"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.contact.email }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -192
+      ],
+      "id": "33a5330a-d4cf-4645-bcfb-b8191199a09e",
+      "name": "Send HTML Mail",
+      "webhookId": "b21dd434-60a8-4747-8e7f-b3cea4fe6229",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XZCp4Cj1T6qgBpNg",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.contact.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "b572221a-9cae-45cf-b7ae-c6ec6135831a",
+      "name": "Send Text Mail",
+      "webhookId": "b21dd434-60a8-4747-8e7f-b3cea4fe6229",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "XZCp4Cj1T6qgBpNg",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json",
+            "user-agent": "Java/17.0.19",
+            "host": "n8n:5678",
+            "accept": "text/html, image/gif, image/jpeg, */*; q=0.2",
+            "connection": "keep-alive",
+            "transfer-encoding": "chunked"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "is_html": false,
+            "body_template": "Hi [cname],\n\nI’m reaching out from [ccompany].\n\nBest regards,\n",
+            "contact": {
+              "country": "Vietnam",
+              "website": null,
+              "phone": "+84 052-883-3726",
+              "city": "Da Nang",
+              "name": "Nguyen Han",
+              "phone_formatted": "+84 052-883-3726",
+              "company": "Viet-Han University",
+              "id": "f0e3a690-8e2e-4b53-8bea-deb19ff83e29",
+              "state": null,
+              "title": "Student",
+              "email": "hanng.22ite@vku.udn.vn"
+            },
+            "dry_run": false,
+            "subject_template": "Hello [cname]"
+          },
+          "webhookUrl": "http://localhost:5678/webhook/send-email",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Render Placeholders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Placeholders": {
+      "main": [
+        [
+          {
+            "node": "Dry Run?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dry Run?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "isHTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "isHTML": {
+      "main": [
+        [
+          {
+            "node": "Send HTML Mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Text Mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "23ea02d6-2efa-4703-8af2-99929d8ebb48",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "88de24a43391b2fbebe0cdb806ea114d2ddb1847435080b0b54657f53e96363c"
+  },
+  "id": "c5RJ_jjlFmVbT3txoFfjL",
+  "tags": []
+}

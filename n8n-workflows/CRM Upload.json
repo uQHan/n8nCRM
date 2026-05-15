@@ -1,5 +1,5 @@
 {
-  "name": "CRM Upload (Spring-owned DB)",
+  "name": "CRM Upload",
   "nodes": [
     {
       "parameters": {

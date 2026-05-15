@@ -1,0 +1,284 @@
+{
+  "name": "CRM Chat Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -760,
+        0
+      ],
+      "id": "webhook-chat",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "sessionId",
+              "value": "={{ $json.body.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "previousMessages",
+              "value": "={{ ($json.body.context && $json.body.context.previousMessages) ? $json.body.context.previousMessages : [] }}",
+              "type": "array"
+            },
+            {
+              "id": "a4",
+              "name": "springBaseUrl",
+              "value": "={{ $env.SPRING_API_URL ? $env.SPRING_API_URL : 'http://spring-backend:8080' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -520,
+        0
+      ],
+      "id": "extract",
+      "name": "Extract"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=<<< PROMPT >>>\nYou are a helpful CRM database assistant.\n\nYou do NOT query the database directly. You must use the provided HTTP tools which call the Spring backend.\n\nAvailable tools (call these when needed):\n- Search Contacts: Use this to find contacts. Inputs: q (string, optional), deliverableOnly (boolean), enrichedOnly (boolean), duplicatesOnly (boolean), page (number), size (number).\n- Get Contact: Use this to retrieve details by id. Inputs: id (uuid).\n- Update Contact: Use this to update a contact by id. Inputs: id (uuid) plus any of these optional fields: name, email, phone, company, title, address, city, state, country, zip, website, company_domain, company_size, company_industry, company_location, phone_formatted.\n\nRules:\n- Never invent data; only use tool results.\n- For updates: if the user didn’t specify a unique contact (id/email) or if multiple contacts match, ask a clarifying question before updating.\n- Keep answers short. Use bullet lists for contact results.\n\nContext (most recent messages):\n{{ JSON.stringify($json.previousMessages) }}\n\nUser message:\n{{ $json.chatInput }}\n<<< END PROMPT >>>",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "ai-agent",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json;\n\n// The AI Agent node typically outputs the assistant text in $json.output.\n// Add a few fallbacks so the webhook always returns { output: string } for Spring.\nconst output =\n  (typeof raw.output === 'string' && raw.output.trim()) ||\n  (typeof raw.text === 'string' && raw.text.trim()) ||\n  (typeof raw.result === 'string' && raw.result.trim()) ||\n  (typeof raw.response === 'string' && raw.response.trim()) ||\n  'Unable to process your request';\n\nreturn [{ json: { output } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "normalize-output",
+      "name": "Normalize Output"
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "respond",
+      "name": "Respond"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        260
+      ],
+      "id": "gemini",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search processed contacts in Spring (name/email/company). Use q for free-text. Optional filters: deliverableOnly, enrichedOnly, duplicatesOnly. Supports pagination via page/size.",
+        "method": "GET",
+        "url": "={{ ($env.SPRING_API_URL ? $env.SPRING_API_URL : 'http://spring-backend:8080').replace(/\\/$/, '') + '/api/contacts/tool/search' }}",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "q", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('q', '', 'string') }}" },
+            { "name": "deliverableOnly", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('deliverableOnly', 'false', 'boolean') }}" },
+            { "name": "enrichedOnly", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('enrichedOnly', 'false', 'boolean') }}" },
+            { "name": "duplicatesOnly", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('duplicatesOnly', 'false', 'boolean') }}" },
+            { "name": "page", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('page', '0', 'number') }}" },
+            { "name": "size", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('size', '25', 'number') }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        -480,
+        260
+      ],
+      "id": "tool-search",
+      "name": "Search Contacts"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get a single contact by UUID (id) via Spring.",
+        "method": "GET",
+        "url": "={{ ($env.SPRING_API_URL ? $env.SPRING_API_URL : 'http://spring-backend:8080').replace(/\\/$/, '') + '/api/contacts/tool/get' }}",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "id", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('id', '', 'string') }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        -700,
+        260
+      ],
+      "id": "tool-get",
+      "name": "Get Contact"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Update a contact by UUID (id). Provide any subset of fields to change: name, email, phone, company, title, address, city, state, country, zip, website, company_domain, company_size, company_industry, company_location, phone_formatted.",
+        "method": "PATCH",
+        "url": "={{ ($env.SPRING_API_URL ? $env.SPRING_API_URL : 'http://spring-backend:8080').replace(/\\/$/, '') + '/api/contacts/tool/update' }}",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "id", "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('id', '', 'string') }}" }
+          ]
+        },
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ (() => { const patch = {}; const readStr = (key) => $fromAI(key, '', 'string'); const strFields = ['name','email','phone','company','title','address','city','state','country','zip','website','company_domain','company_size','company_industry','company_location','phone_formatted']; for (const f of strFields) { const v = readStr(f); if (typeof v === 'string' && v.trim() !== '') patch[f] = v; } return patch; })() }}"
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        -920,
+        260
+      ],
+      "id": "tool-update",
+      "name": "Update Contact"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Output": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Contacts": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contact": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Contact": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}
