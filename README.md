@@ -1,10 +1,10 @@
 # CRM Data Cleaning & Enrichment Automation
 
-A proof-of-concept application for automated CRM data cleaning and enrichment using Next.js, n8n, and Supabase.
+A proof-of-concept application for automated CRM data cleaning and enrichment using Next.js, Spring Boot, n8n, and Supabase.
 
 ## Features
 
-- 📤 **File Upload**: Support for CSV and Excel (XLSX) files
+- 📤 **File Upload**: Support for CSV and Excel (XLSX) files via drag-and-drop
 - 🔍 **Data Preview**: View first 50 rows before processing
 - 🗺️ **Column Mapping**: Auto-detect and manually adjust column mappings
 - ✨ **Data Cleaning**: Automatic trimming, deduplication, and validation
@@ -16,6 +16,9 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
 - 📊 **Real-time Progress**: Live updates using Supabase Realtime
 - 💾 **Download Results**: Export cleaned data as CSV
 - 💬 **CRM Chat Assistant**: Ask for customer contacts and request contact updates via chat (powered by n8n + Supabase)
+- 📧 **Email Sending**: Dispatch emails to processed contacts using customizable templates
+- 🌙 **Dark Mode**: Full dark mode support
+- 📱 **Responsive Design**: Mobile-friendly layout
 
 ## Architecture
 
@@ -32,87 +35,136 @@ A proof-of-concept application for automated CRM data cleaning and enrichment us
               └─────┘
 ```
 
-## Setup Instructions
+| Layer | Technology | Purpose |
+|-------|-----------|---------| 
+| Frontend | Next.js 16 + React 19 + TypeScript | React framework |
+| Styling | Tailwind CSS v4 | Utility-first CSS |
+| Backend | Spring Boot (Java 17) | REST API, orchestration, DB writes |
+| Database | Supabase (PostgreSQL) | Data storage + realtime |
+| Automation | n8n | Workflow orchestration |
+| Parsing | PapaParser + XLSX | CSV/Excel handling |
 
-### 1. Supabase Setup
+---
 
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Copy your project URL and anon key
-3. In the Supabase SQL Editor, run the schema from `supabase-schema.sql`
+## Prerequisites
+
+- Node.js 18+ installed
+- Java 17+ installed
+- A Postgres database (Supabase Postgres recommended)
+- Basic understanding of Next.js and n8n
+
+## 🚀 Quick Start
+
+### Step 1: Database Setup (Supabase) — 2 minutes
+
+1. Go to [supabase.com](https://supabase.com) and create a new project
+2. Wait for the project to be provisioned
+3. Go to **SQL Editor** and run the contents of `supabase-schema.sql`
 4. Enable Realtime for the `processing_jobs` table:
    - Go to Database → Replication
    - Find `processing_jobs` and enable it
 
-### 2. Environment Variables
+### Step 2: Backend Setup (Spring Boot) — 2 minutes
 
-1. Copy the environment template:
-   ```bash
-   cd nextjs-app
-   cp .env.local.example .env.local
-   ```
+Set env vars for the backend (PowerShell example):
 
-2. Point the frontend at the Spring backend:
-   ```env
-   NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
-   ```
+```powershell
+$env:SUPABASE_DB_JDBC_URL="jdbc:postgresql://<host>:5432/postgres?sslmode=require"
+$env:SUPABASE_DB_USER="postgres"
+$env:SUPABASE_DB_PASSWORD="<password>"
 
-### 3. Install Dependencies
+$env:N8N_CRM_WEBHOOK_URL="http://localhost:5678/webhook/process-crm"
+$env:N8N_CHAT_WEBHOOK_URL="http://localhost:5678/webhook/chat"
+```
+
+Run the backend:
+
+```powershell
+cd n8ncrmbackend
+./gradlew bootRun
+```
+
+Backend will run at http://localhost:8080
+
+### Step 3: Frontend Setup — 2 minutes
 
 ```bash
 cd nextjs-app
+
+# Create environment file
+cp .env.local.example .env.local
+
+# Edit .env.local and point to Spring
+# NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
+
+# Install dependencies
 npm install
-```
 
-### 4. Run the Development Server
-
-```bash
+# Start the development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000 — you should see the CRM Data Cleaner!
 
-### 5. n8n Setup
+### Step 4: Test Without n8n — 1 minute
 
-1. Install n8n (if not already installed):
-   ```bash
-   npm install -g n8n
-   ```
+You can test the file upload and preview features right now without n8n:
 
-2. Run n8n:
-   ```bash
-   n8n start
-   ```
+1. Go to http://localhost:3000
+2. Click **Upload CSV/Excel**
+3. Select `sample-data.csv` from the project root
+4. You'll see: file preview ✓, column mapping ✓, enrichment options ✓
 
-3. Create workflows in n8n with:
-   - **Webhook trigger** at `/webhook/process-crm`
-   - **Data cleaning nodes** (see `n8n-workflow-guide.md` for details)
-   - Return processed records to Spring (Spring saves to DB)
+**Note**: The "Start Processing" button triggers n8n via Spring, so you still need n8n for the full pipeline.
 
-4. (Optional) Create a second workflow for the **CRM Chat Assistant**:
-   - **Webhook trigger** at `/webhook/chat` (or set `NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL` to your n8n webhook URL)
-   - Read chat input + session context
-   - Return JSON in the shape: `{ "output": "...assistant reply..." }`
+---
 
-## Project Structure
+## 🔧 Full Setup with n8n (Optional)
 
+### Step 5: Install & Run n8n
+
+```bash
+npm install -g n8n
+n8n start
 ```
-nextjs-app/
-├── app/
-│   ├── page.tsx          # Main application page
-│   ├── layout.tsx        # Root layout
-│   └── globals.css       # Global styles
-├── lib/
-│   └── fileParser.ts     # CSV/Excel parsing utilities
-├── types/
-│   └── index.ts          # TypeScript type definitions
-├── utils/
-│   └── supabase/         # Supabase client configuration
-│       ├── client.ts
-│       ├── middleware.ts
-│       └── server.ts
-├── .env.local.example    # Environment variables template
-└── package.json
-```
+
+n8n will start at http://localhost:5678
+
+### Step 6: Create/Import the n8n Workflow
+
+**Recommended**: Import the provided workflow exports:
+
+1. In n8n, go to **Workflows** → **Import from File**
+2. Import [CRM Upload.json](CRM%20Upload.json) and/or [CRM Chat.json](CRM%20Chat.json) and/or [Send Email.json](Send%20Email.json)
+3. Ensure the **Webhook** node path is `/webhook/process-crm`
+4. Ensure the workflow responds **When Last Node Finishes**
+5. Click **Active** to activate the workflow
+
+Or build manually — see [n8n-workflow-guide.md](n8n-workflow-guide.md) for detailed instructions.
+
+**Docker note**: The compose stack persists n8n state in the `n8n_storage` volume. Updating the JSON file in this repo does not automatically update the workflow inside the running n8n container.
+
+### Step 7: Test End-to-End
+
+1. Make sure n8n workflow is **Active**
+2. Go to http://localhost:3000
+3. Upload `sample-data.csv`
+4. Select enrichment options
+5. Click **Start Processing**
+6. Watch the real-time progress!
+7. Download your cleaned data
+
+---
+
+## Codespaces Notes
+
+If you run this stack in GitHub Codespaces:
+
+- Expose/forward port `3000` to open the Next.js UI
+- Also forward port `5678` if you want to manage n8n in the browser
+- Import workflows from the forwarded n8n URL (port `5678`)
+
+---
 
 ## Usage
 
@@ -123,59 +175,140 @@ nextjs-app/
 5. **Start Processing**: Click "Start Processing" to begin
 6. **Monitor Progress**: Watch real-time updates as n8n processes your data
 7. **Download Results**: Get your cleaned CSV file
-8. **Chat With CRM Assistant**: Use the bottom-right chat widget to retrieve customer contacts and request updates (the chat workflow runs in n8n)
+8. **Chat With CRM Assistant**: Use the bottom-right chat widget to retrieve customer contacts and request updates
 
-## Chat Assistant (Contacts)
+## Chat Assistant
 
 The app includes a persistent chat widget (bottom-right) that calls Spring endpoints; Spring stores messages in the database and calls n8n to generate assistant responses.
 
-Typical chat requests you can support in n8n:
-
-- “Show me the latest 10 processed contacts”
-- “Find contact by email john@acme.com”
-- “Update John’s phone to +1 555-123-4567”
-- “Mark this contact as duplicate”
-
-Note: The exact behavior depends on how you implement the n8n chat workflow (the frontend posts `sessionId`, `chatInput`, and recent messages for context).
+Typical chat requests:
+- "Show me the latest 10 processed contacts"
+- "Find contact by email john@acme.com"
+- "Update John's phone to +1 555-123-4567"
+- "Mark this contact as duplicate"
 
 ## Data Processing Flow
 
 1. **Upload**: File is parsed in the browser
 2. **Validation**: Check for required columns and data format
-3. **Cleaning**: 
-   - Trim whitespace
-   - Standardize formatting
-   - Remove invalid characters
-4. **Deduplication**: Find and merge duplicate records
-5. **Enrichment**: 
-   - Verify emails
-   - Lookup company data
-   - Validate phone numbers
-6. **Results**: Store in Supabase and notify frontend
+3. **Cleaning**: Trim whitespace, standardize formatting, remove invalid characters
+4. **Deduplication**: Find and merge duplicate records by email
+5. **Enrichment**: Verify emails, lookup company data, validate phone numbers
+6. **Results**: Store in Supabase and notify frontend via Realtime
 
-## Technologies
+### What Gets Cleaned (Sample Data)
 
-- **Frontend**: Next.js 16 + React 19 + TypeScript
-- **Styling**: Tailwind CSS
-- **Database**: Supabase (PostgreSQL)
-- **Automation**: n8n
-- **File Parsing**: PapaParser (CSV) + XLSX
-- **Real-time**: Supabase Realtime
+- **Trimmed whitespace**: "  Jane Doe  " → "Jane Doe"
+- **Lowercase emails**: "JANE.DOE@EXAMPLE.COM" → "jane.doe@example.com"
+- **Duplicates removed**: John Smith appears twice, only one kept
+- **Invalid emails flagged**: "bob@company" marked as invalid
+- **Phone formatting**: Various formats → standardized format
+- **Missing data**: Empty fields handled gracefully
+
+---
+
+## Project Structure
+
+```
+n8nCRM/
+├── nextjs-app/                  # Frontend (Next.js + React + TypeScript)
+│   ├── app/
+│   │   ├── page.tsx             # Main application page
+│   │   ├── layout.tsx           # Root layout
+│   │   └── globals.css          # Global styles
+│   ├── lib/
+│   │   └── fileParser.ts        # CSV/Excel parsing utilities
+│   ├── types/
+│   │   └── index.ts             # TypeScript type definitions
+│   ├── .env.local.example       # Environment variables template
+│   └── package.json
+├── n8ncrmbackend/               # Backend (Spring Boot + Java 17)
+│   └── src/main/java/...        # REST API, services, JPA entities
+├── supabase-schema.sql          # Database schema
+├── sample-data.csv              # Test dataset with common issues
+├── CRM Upload.json              # n8n workflow export (data processing)
+├── CRM Chat.json                # n8n workflow export (chat assistant)
+├── Send Email.json              # n8n workflow export (email sending)
+├── docker-compose.yml           # Full-stack containerized deployment
+├── n8n-workflow-guide.md        # Detailed n8n workflow building guide
+├── Project_Report.md            # Formal internship report
+└── README.md                    # This file
+```
+
+### Database Schema (6 tables)
+
+| Table | Purpose |
+|-------|---------|
+| `processing_jobs` | Track workflow status and progress |
+| `raw_contacts` | Original uploaded data (audit trail) |
+| `processed_contacts` | Cleaned/enriched data with metadata |
+| `enrichment_logs` | Audit trail of operations applied |
+| `chat_sessions` | Chat session metadata |
+| `chat_messages` | Individual chat messages |
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Column Mapping | Different CSVs use different headers ("Email" vs "Email Address"). Auto-detection + manual override. |
+| CSV Conversion in Browser | Simpler architecture, no server-side storage. XLSX → CSV using xlsx library. |
+| Supabase Realtime | Live progress updates without polling via postgres_changes channels. |
+| Simple HTML Tables | Lightweight, no heavy dependencies. Could upgrade to TanStack Table later. |
+| 50-Row Preview Limit | Prevent browser freeze on large files. Virtual scrolling possible later. |
+| n8n for Business Logic | Visual workflows allow rapid iteration and easy API integration without backend code changes. |
+
+---
+
+## 🐛 Troubleshooting
+
+### Frontend won't start
+```bash
+cd nextjs-app
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+### Supabase connection error
+- Check your `.env.local` file — no trailing slashes in URL
+- Restart the dev server after changing .env
+
+### n8n webhook not working
+- Verify the workflow is **Active** in n8n
+- Check the webhook URL in env vars
+- Check browser console for errors
+
+---
+
+## 🎯 Testing Checklist
+
+- [ ] Frontend loads at localhost:3000
+- [ ] Can upload CSV file
+- [ ] Preview shows data correctly
+- [ ] Column mappings are detected
+- [ ] Can toggle enrichment options
+- [ ] (With n8n) Processing starts and shows real-time progress
+- [ ] (With n8n) Can download results
+
+---
 
 ## Future Enhancements
 
-- [ ] User authentication
+- [ ] User authentication (Supabase Auth / Spring Security)
 - [ ] Multiple file upload
 - [ ] Advanced deduplication settings
-- [ ] More enrichment sources
+- [ ] More enrichment sources (Clearbit, LinkedIn)
 - [ ] Data quality analytics dashboard
 - [ ] Export to multiple formats
 - [ ] Scheduled processing
-- [ ] API access
+- [ ] API access (REST endpoints)
+- [ ] Queue-based processing (RabbitMQ/Kafka)
 
 ## Notes
 
-- This is a **proof of concept** - not production-ready
+- This is a **proof of concept** — not production-ready
 - Authentication is not implemented (placeholder exists)
 - File size limit: 10MB (can be adjusted)
 - Preview shows first 50 rows only

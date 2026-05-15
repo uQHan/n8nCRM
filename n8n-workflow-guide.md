@@ -6,6 +6,146 @@ This guide explains how to create the n8n workflows for CRM data cleaning and en
 
 In the updated architecture, the n8n workflow receives data from the Spring backend, performs cleaning/enrichment/business logic, and returns the processed records back to Spring. Spring is the only component that writes to the database.
 
+## Outbound Email (Send Email) Workflow (Optional)
+
+This workflow is used by the **Next.js Send Email page** when you choose **Delivery: n8n webhook**.
+
+### Step 1: Webhook Trigger
+
+1. Add **Webhook** node
+2. Configure:
+   - **Webhook Name**: `send-email`
+   - **HTTP Method**: POST
+   - **Path**: `/webhook/send-email`
+   - **Response Mode**: When Last Node Finishes
+
+Configure the Spring backend with:
+- `N8N_EMAIL_WEBHOOK_URL=http://localhost:5678/webhook/send-email`
+
+### Incoming payload format
+
+Spring will call your webhook with a JSON body like:
+
+```json
+{
+  "dry_run": false,
+  "is_html": false,
+  "subject_template": "Hello [cname]",
+  "body_template": "Hi [cname] from [ccompany]",
+  "contact": {
+    "id": "uuid",
+    "name": "Alice",
+    "email": "alice@example.com",
+    "company": "Acme Ltd",
+    "phone": null,
+    "phone_formatted": null,
+    "title": null,
+    "city": null,
+    "state": null,
+    "country": null,
+    "website": null
+  }
+}
+```
+
+Notes:
+- `subject_template` and `body_template` contain placeholder tokens like `[cname]`, `[ccompany]` (and `[ccompnay]`).
+- If `dry_run` is `true`, you should skip actually sending (but you can still render/validate).
+
+### Step 2: Render placeholders (Code node)
+
+Add a **Code** node (JavaScript) to render placeholders from `contact`:
+
+```javascript
+const payload = $json;
+const c = payload.contact || {};
+
+function render(t) {
+  if (!t) return t;
+  return String(t)
+    .replaceAll('[cname]', c.name || '')
+    .replaceAll('[ccompany]', c.company || '')
+    .replaceAll('[ccompnay]', c.company || '')
+    .replaceAll('[cemail]', c.email || '');
+}
+
+return [{
+  json: {
+    ...payload,
+    subject: render(payload.subject_template),
+    body: render(payload.body_template)
+  }
+}];
+```
+
+### Step 3: Send the email (only if not dry-run)
+
+Options:
+- Use the built-in **Email** node in n8n (SMTP) and map:
+  - To: `{{ $json.contact.email }}`
+  - Subject: `{{ $json.subject }}`
+  - Body: `{{ $json.body }}`
+
+If `is_html` is true, configure the Email node to send HTML (or use an HTML-capable node).
+
+### Step 4: Respond to Webhook
+
+Add **Respond to Webhook** as the last node.
+
+Return a JSON response (must be valid JSON, do not return an empty body):
+
+```json
+{ "ok": true }
+```
+
+If you want to return diagnostics for debugging:
+
+```json
+{ "ok": true, "dry_run": true, "to": "alice@example.com" }
+```
+
+
+## CRM Chat Assistant Workflow (AI Agent + Spring DB)
+
+This workflow is called by the Spring backend (not the browser directly).
+
+Spring calls your n8n webhook:
+- `POST /webhook/chat` (matches `N8N_CHAT_WEBHOOK_URL=http://localhost:5678/webhook/chat`)
+
+The workflow must respond with valid JSON shaped like:
+
+```json
+{ "output": "...assistant reply..." }
+```
+
+### What the agent is allowed to do
+
+In this architecture, **n8n handles AI**, and **Spring handles all database reads/writes**.
+
+The provided [CRM Chat.json](CRM%20Chat.json) workflow uses:
+- A **LangChain AI Agent** (Gemini model)
+- **HTTP Request Tool** nodes that call Spring:
+  - `GET /api/contacts` (search)
+  - `GET /api/contacts/{id}` (details)
+  - `PATCH /api/contacts/{id}` (update)
+
+### Required environment variables
+
+The chat workflow uses `SPRING_API_URL` to reach the Spring backend.
+
+If running the full Docker stack, `docker-compose.yml` already sets:
+- `SPRING_API_URL=http://spring-backend:8080`
+
+If running n8n locally (outside Docker), set:
+- `SPRING_API_URL=http://localhost:8080`
+
+### Setup steps
+
+1. In n8n, import [CRM Chat.json](CRM%20Chat.json)
+2. Configure the **Google Gemini Chat Model** credentials (API key) in n8n
+3. Activate the workflow
+4. In Spring, ensure `N8N_CHAT_WEBHOOK_URL` points to your running n8n instance
+
 
 ## File Upload, cleaning, enrichment Workflow
 
@@ -28,7 +168,7 @@ Phone Validation (Code - optional)
   ↓
 Build processed_contacts payload
   ↓
-Respond to Webhook (return JSON)
+Return processed records (last node output)
 ```
 
 ## Creating the Workflow
@@ -40,7 +180,13 @@ Respond to Webhook (return JSON)
    - **Webhook Name**: `process-crm`
    - **HTTP Method**: POST
    - **Path**: `/webhook/process-crm`
-   - **Response Mode**: Immediately
+  - **Response Mode**: When Last Node Finishes
+
+Important:
+- The Spring backend needs the processed records in the HTTP response.
+- Supported response shapes:
+  - An array of contact objects (this is what the provided workflow export returns)
+  - Or an object like `{ "processedContacts": [ ... ] }`
 
 This receives data from Spring in this format:
 ```json
