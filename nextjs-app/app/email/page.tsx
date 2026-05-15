@@ -281,6 +281,7 @@ export default function EmailPage() {
                   name="deliveryMode"
                   checked={deliveryMode === 'SMTP'}
                   onChange={() => setDeliveryMode('SMTP')}
+                  disabled={true}
                 />
                 SMTP (Spring Mail)
               </label>
@@ -293,11 +294,6 @@ export default function EmailPage() {
                 />
                 n8n webhook
               </label>
-              {deliveryMode === 'N8N' && (
-                <span className="text-xs text-gray-600 dark:text-gray-300">
-                  Requires <span className="font-mono">N8N_EMAIL_WEBHOOK_URL</span> on the backend.
-                </span>
-              )}
             </div>
 
             {placeholders.length > 0 && (

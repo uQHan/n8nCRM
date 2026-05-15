@@ -44,17 +44,23 @@ public class ContactsController {
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "25") int size
 	) {
-		int safePage = Math.max(0, page);
-		int safeSize = Math.min(200, Math.max(1, size));
-		Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return searchInternal(q, deliverableOnly, enrichedOnly, duplicatesOnly, page, size);
+	}
 
-		var result = contactRepository.searchContacts(q, deliverableOnly, enrichedOnly, duplicatesOnly, pageable);
-		return new ApiContactSearchResponse(
-				result.getContent().stream().map(ApiContactSummary::from).toList(),
-				result.getTotalElements(),
-				result.getNumber(),
-				result.getSize()
-		);
+	/**
+	 * Tool-friendly endpoint for n8n AI Agent HTTP tools.
+	 * Uses a fixed URL with query parameters, so tools don't need to build dynamic URLs.
+	 */
+	@GetMapping("/tool/search")
+	public ApiContactSearchResponse toolSearch(
+			@RequestParam(required = false) String q,
+			@RequestParam(defaultValue = "false") boolean deliverableOnly,
+			@RequestParam(defaultValue = "false") boolean enrichedOnly,
+			@RequestParam(defaultValue = "false") boolean duplicatesOnly,
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "25") int size
+	) {
+		return searchInternal(q, deliverableOnly, enrichedOnly, duplicatesOnly, page, size);
 	}
 
 	@GetMapping("/{id}")
@@ -65,11 +71,36 @@ public class ContactsController {
 				.orElse(ResponseEntity.notFound().build());
 	}
 
+	/**
+	 * Tool-friendly endpoint for n8n AI Agent HTTP tools.
+	 * Uses a fixed URL with query parameters, so tools don't need to build dynamic URLs.
+	 */
+	@GetMapping("/tool/get")
+	public ResponseEntity<ApiContactDetail> toolGetContact(@RequestParam("id") UUID id) {
+		return getContact(id);
+	}
+
 	@PatchMapping("/{id}")
 	public ResponseEntity<?> updateContact(
 			@PathVariable("id") UUID id,
 			@Valid @RequestBody ApiContactUpdateRequest request
 	) {
+		return updateContactInternal(id, request);
+	}
+
+	/**
+	 * Tool-friendly endpoint for n8n AI Agent HTTP tools.
+	 * Uses a fixed URL with query parameters, so tools don't need to build dynamic URLs.
+	 */
+	@PatchMapping("/tool/update")
+	public ResponseEntity<?> toolUpdateContact(
+			@RequestParam("id") UUID id,
+			@Valid @RequestBody ApiContactUpdateRequest request
+	) {
+		return updateContactInternal(id, request);
+	}
+
+	private ResponseEntity<?> updateContactInternal(UUID id, ApiContactUpdateRequest request) {
 		var existingOpt = contactRepository.findById(id);
 		if (existingOpt.isEmpty()) {
 			return ResponseEntity.notFound().build();
@@ -134,5 +165,26 @@ public class ContactsController {
 		if (value == null) return null;
 		String trimmed = value.trim();
 		return trimmed.isBlank() ? null : trimmed;
+	}
+
+	private ApiContactSearchResponse searchInternal(
+			String q,
+			boolean deliverableOnly,
+			boolean enrichedOnly,
+			boolean duplicatesOnly,
+			int page,
+			int size
+	) {
+		int safePage = Math.max(0, page);
+		int safeSize = Math.min(200, Math.max(1, size));
+		Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+		var result = contactRepository.searchContacts(q, deliverableOnly, enrichedOnly, duplicatesOnly, pageable);
+		return new ApiContactSearchResponse(
+				result.getContent().stream().map(ApiContactSummary::from).toList(),
+				result.getTotalElements(),
+				result.getNumber(),
+				result.getSize()
+		);
 	}
 }
