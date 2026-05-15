@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const springBackendInternalUrl = (
-  process.env.SPRING_BACKEND_INTERNAL_URL || "http://localhost:8080"
+  process.env.SPRING_BACKEND_INTERNAL_URL || "http://spring-backend:8080"
 ).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {

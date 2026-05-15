@@ -35,6 +35,8 @@ services:
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8ncrm}
       - DB_POSTGRESDB_USER=${POSTGRES_NON_ROOT_USER:-n8n}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_NON_ROOT_PASSWORD:-n8n}
+      # Used by the CRM Chat workflow (HTTP tools) to call Spring inside the docker network.
+      - SPRING_API_URL=http://spring-backend:8080
       - NODE_FUNCTION_ALLOW_EXTERNAL=uuid
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     ports:
@@ -73,10 +75,26 @@ services:
     build:
       context: ./nextjs-app
       dockerfile: Dockerfile
+      args:
+        SPRING_BACKEND_INTERNAL_URL: http://spring-backend:8080
     restart: always
     environment:
-      - NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080
+      # Used by Next.js rewrites() to proxy /api/* to Spring inside the docker network.
+      - SPRING_BACKEND_INTERNAL_URL=http://spring-backend:8080
     ports:
       - 3000:3000
     depends_on:
       - spring-backend
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: no
+    depends_on:
+      - nextjs
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    # Expose the Next.js UI (recommended for a "hosted app" feel).
+    # Change to http://n8n:5678 if you specifically need external callers to hit n8n webhooks.
+    command: ["http", "http://nextjs:3000", "--log=stdout"]
+    ports:
+      - 4040:4040
