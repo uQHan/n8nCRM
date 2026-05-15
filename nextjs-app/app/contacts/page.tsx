@@ -9,8 +9,6 @@ import type {
   ProcessedContactRow,
 } from '@/types';
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
-
 function Field({
   label,
   value,
@@ -88,15 +86,15 @@ export default function ContactsPage() {
 
     debounceRef.current = window.setTimeout(async () => {
       try {
-        const url = new URL(`${backendBaseUrl}/api/contacts`);
-        if (query.trim()) url.searchParams.set('q', query.trim());
-        url.searchParams.set('deliverableOnly', String(deliverableOnly));
-        url.searchParams.set('enrichedOnly', String(enrichedOnly));
-        url.searchParams.set('duplicatesOnly', String(duplicatesOnly));
-        url.searchParams.set('page', String(page));
-        url.searchParams.set('size', String(size));
+        const params = new URLSearchParams();
+        if (query.trim()) params.set('q', query.trim());
+        params.set('deliverableOnly', String(deliverableOnly));
+        params.set('enrichedOnly', String(enrichedOnly));
+        params.set('duplicatesOnly', String(duplicatesOnly));
+        params.set('page', String(page));
+        params.set('size', String(size));
 
-        const res = await fetch(url.toString());
+        const res = await fetch(`/api/contacts?${params.toString()}`);
         if (!res.ok) {
           throw new Error(`Failed to load contacts (${res.status})`);
         }
@@ -121,7 +119,7 @@ export default function ContactsPage() {
     setEditLoading(true);
     setEditingId(id);
     try {
-      const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(`Failed to load contact (${res.status})`);
       const detail = (await res.json()) as ProcessedContactRow;
       setForm({
@@ -154,7 +152,7 @@ export default function ContactsPage() {
     setSaving(true);
     setEditError(null);
     try {
-      const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(editingId)}`, {
+      const res = await fetch(`/api/contacts/${encodeURIComponent(editingId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildUpdateRequest(form)),
@@ -179,7 +177,7 @@ export default function ContactsPage() {
   async function deleteContact(id: string) {
     if (!confirm('Delete this contact? This cannot be undone.')) return;
     try {
-      const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       if (res.status === 204) {

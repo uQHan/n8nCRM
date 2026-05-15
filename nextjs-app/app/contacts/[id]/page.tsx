@@ -3,8 +3,6 @@ import { notFound } from 'next/navigation';
 import type { ProcessedContactRow } from '@/types';
 import ContactDetailClient from './ContactDetailClient';
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
-
 function Badge({ children, tone }: { children: React.ReactNode; tone: 'green' | 'indigo' | 'amber' }) {
   const cls =
     tone === 'green'
@@ -21,7 +19,7 @@ function Badge({ children, tone }: { children: React.ReactNode; tone: 'green' | 
 }
 
 async function getContact(id: string): Promise<ProcessedContactRow> {
-  const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(id)}`, {
+  const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
     cache: 'no-store',
   });
 

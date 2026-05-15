@@ -10,8 +10,6 @@ import type {
   EmailSendResponse,
 } from '@/types';
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
-
 function classNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
 }
@@ -53,7 +51,7 @@ export default function EmailPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${backendBaseUrl}/api/email/placeholders`);
+        const res = await fetch(`/api/email/placeholders`);
         if (!res.ok) return;
         const data = (await res.json()) as EmailPlaceholdersResponse;
         setPlaceholders(data.placeholders || []);
@@ -73,13 +71,13 @@ export default function EmailPage() {
 
     debounceRef.current = window.setTimeout(async () => {
       try {
-        const url = new URL(`${backendBaseUrl}/api/contacts`);
-        if (query.trim()) url.searchParams.set('q', query.trim());
-        url.searchParams.set('deliverableOnly', String(deliverableOnly));
-        url.searchParams.set('page', String(page));
-        url.searchParams.set('size', String(size));
+        const params = new URLSearchParams();
+        if (query.trim()) params.set('q', query.trim());
+        params.set('deliverableOnly', String(deliverableOnly));
+        params.set('page', String(page));
+        params.set('size', String(size));
 
-        const res = await fetch(url.toString());
+        const res = await fetch(`/api/contacts?${params.toString()}`);
         if (!res.ok) {
           throw new Error(`Failed to load contacts (${res.status})`);
         }
@@ -139,7 +137,7 @@ export default function EmailPage() {
     }
 
     try {
-      const res = await fetch(`${backendBaseUrl}/api/email/preview`, {
+      const res = await fetch(`/api/email/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,7 +174,7 @@ export default function EmailPage() {
 
     setSending(true);
     try {
-      const res = await fetch(`${backendBaseUrl}/api/email/send`, {
+      const res = await fetch(`/api/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

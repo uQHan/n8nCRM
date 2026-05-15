@@ -4,8 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import type { ContactUpdateRequest, ProcessedContactRow } from '@/types';
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
-
 function normalizeInput(value: string) {
   const trimmed = value.trim();
   return trimmed.length === 0 ? '' : trimmed;
@@ -87,7 +85,7 @@ export default function ContactDetailClient({ initialContact }: { initialContact
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildUpdateRequest(form)),
@@ -116,7 +114,7 @@ export default function ContactDetailClient({ initialContact }: { initialContact
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`${backendBaseUrl}/api/contacts/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
 

@@ -16,12 +16,11 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    const [sessionId, setSessionId] = useState<string>(initialSessionId || '');
    const [error, setError] = useState<string | null>(null);
    const messagesEndRef = useRef<HTMLDivElement>(null);
-   const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
 
    // Wrap in useCallback so they can be stable deps
    const createNewSession = useCallback(async () => {
       try {
-         const res = await fetch(`${backendBaseUrl}/api/chat/sessions`, {
+         const res = await fetch(`/api/chat/sessions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
          });
@@ -34,13 +33,13 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
       } catch {
          setError('Failed to create new chat session');
       }
-   }, [backendBaseUrl, onSessionChange]);
+   }, [onSessionChange]);
 
    const loadChatHistory = useCallback(async (sid: string) => {
       if (!sid) return;
 
       try {
-         const res = await fetch(`${backendBaseUrl}/api/chat/sessions/${sid}/messages`);
+         const res = await fetch(`/api/chat/sessions/${sid}/messages`);
          if (!res.ok) throw new Error('Failed to load chat history');
          const data = await res.json();
 
@@ -55,7 +54,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
       } catch {
          // Failed to load history — not fatal
       }
-   }, [backendBaseUrl]);
+   }, []);
 
    // Issue #16: Fixed — proper dependency array
    useEffect(() => {
@@ -89,7 +88,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
       setError(null);
 
       try {
-         const response = await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}/messages`, {
+         const response = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
@@ -124,7 +123,7 @@ export default function ChatWidget({ sessionId: initialSessionId, onSessionChang
    const handleClearChat = async () => {
       try {
          if (sessionId) {
-            await fetch(`${backendBaseUrl}/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+            await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
          }
          setMessages([]);
          await createNewSession();

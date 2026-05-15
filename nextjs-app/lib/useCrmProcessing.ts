@@ -58,8 +58,6 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const backendBaseUrl = process.env.NEXT_PUBLIC_SPRING_API_URL || 'http://localhost:8080';
-
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
@@ -95,7 +93,7 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
 
   const fetchProcessedData = useCallback(async (jobId: string) => {
     try {
-      const res = await fetch(`${backendBaseUrl}/api/crm/jobs/${jobId}/processed-contacts`);
+      const res = await fetch(`/api/crm/jobs/${jobId}/processed-contacts`);
       if (!res.ok) throw new Error('Failed to fetch processed data');
       const data = await res.json();
       setProcessedData(data || []);
@@ -105,7 +103,7 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
       setError('Failed to fetch processed data');
       setIsProcessing(false);
     }
-  }, [backendBaseUrl]);
+  }, []);
 
   const handleStartProcessing = useCallback(async () => {
     if (!parsedData || !selectedFile) return;
@@ -115,7 +113,7 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
     setViewStage('processing');
 
     try {
-      const response = await fetch(`${backendBaseUrl}/api/crm/jobs`, {
+      const response = await fetch(`/api/crm/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,7 +133,7 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
       let delay = 1000;
       const poll = async () => {
         try {
-          const jobRes = await fetch(`${backendBaseUrl}/api/crm/jobs/${job.id}`);
+          const jobRes = await fetch(`/api/crm/jobs/${job.id}`);
           if (!jobRes.ok) return;
           const latest = (await jobRes.json()) as ProcessingJob;
           setProcessingJob(latest);
@@ -161,7 +159,7 @@ export function useCrmProcessing(): CrmProcessingState & CrmProcessingActions {
       setIsProcessing(false);
       setViewStage('preview');
     }
-  }, [parsedData, selectedFile, backendBaseUrl, columnMappings, enrichmentOptions, fetchProcessedData]);
+  }, [parsedData, selectedFile, columnMappings, enrichmentOptions, fetchProcessedData]);
 
   const handleDownload = useCallback(() => {
     if (processedData.length === 0) return;
