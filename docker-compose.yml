@@ -55,9 +55,9 @@ services:
     restart: always
     environment:
       # Database — matches ${SUPABASE_DB_*} placeholders in application.properties
-      - SUPABASE_DB_JDBC_URL=jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
-      - SUPABASE_DB_USER=postgres.beykniltpmbpbytgzezw
-      - SUPABASE_DB_PASSWORD=414BOW9fXVgfWmXf
+      - SUPABASE_DB_JDBC_URL=${SUPABASE_DB_JDBC_URL}
+      - SUPABASE_DB_USER=${SUPABASE_DB_USER}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
       # n8n webhooks (internal service-to-service)
       - N8N_CRM_WEBHOOK_URL=http://n8n:5678/webhook/process-crm
       - N8N_CHAT_WEBHOOK_URL=http://n8n:5678/webhook/chat
